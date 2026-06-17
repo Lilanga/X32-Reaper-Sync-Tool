@@ -69,13 +69,20 @@ export interface ReaperMonitor {
   recent: ReaperMonitorEntry[];
 }
 
-/** Result of probing the app's own listener on loopback vs the LAN interface. */
+export interface ReaperSelfTestTarget {
+  /** Interface name (e.g. "Ethernet", "vEthernet (WSL)"). */
+  label: string;
+  ip: string;
+  /** Whether a probe sent to this interface reached the listener. */
+  received: boolean;
+}
+
+/** Result of probing the app's own listener on loopback + every local interface. */
 export interface ReaperSelfTest {
   /** Listener received a packet sent to 127.0.0.1 (proves the receive path works). */
   loopback: boolean;
-  /** Listener received a packet sent to the LAN IP (a "no" usually means a firewall block). */
-  lan: boolean;
-  lanIp: string | null;
+  /** Per-interface reachability — a blocked real-LAN interface usually means a firewall rule. */
+  targets: ReaperSelfTestTarget[];
 }
 
 export interface AppState {

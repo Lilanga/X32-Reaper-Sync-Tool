@@ -16,6 +16,7 @@ import type {
   ReaperMonitor,
   ReaperMonitorEntry,
   ReaperSelfTest,
+  ReaperSelfTestTarget,
 } from '@shared/ipc/contract';
 
 /** REAPER command: "Control surface: Refresh all surfaces" — re-sends feedback. */
@@ -30,15 +31,16 @@ function summarizeArgs(args: OscArg[]): string {
     .join(', ');
 }
 
-/** First non-internal IPv4 address — the interface REAPER would send to over the LAN. */
-function firstLanIPv4(): string | null {
+/** Every non-internal IPv4 address — the interfaces REAPER could be sending to. */
+function lanIPv4Interfaces(): Array<{ name: string; ip: string }> {
+  const out: Array<{ name: string; ip: string }> = [];
   const ifaces = networkInterfaces();
   for (const name of Object.keys(ifaces)) {
     for (const ni of ifaces[name] ?? []) {
-      if (ni.family === 'IPv4' && !ni.internal) return ni.address;
+      if (ni.family === 'IPv4' && !ni.internal) out.push({ name, ip: ni.address });
     }
   }
-  return null;
+  return out;
 }
 
 export interface ReaperConnectOptions {
@@ -60,7 +62,7 @@ export class ReaperService extends EventEmitter {
   private lastInboundAt: number | null = null;
   private readonly recent: ReaperMonitorEntry[] = [];
   private monitorTimer: NodeJS.Timeout | null = null;
-  private selfTestState: { loopback: boolean; lan: boolean } | null = null;
+  private selfTestReceived: Set<string> | null = null;
 
   getStatus(): ReaperStatus {
     return {
@@ -139,33 +141,36 @@ export class ReaperService extends EventEmitter {
    * is reachable (lan — a "no" almost always means a firewall is dropping it).
    */
   async selfTest(): Promise<ReaperSelfTest> {
-    const lanIp = firstLanIPv4();
-    if (!this.socket) return { loopback: false, lan: false, lanIp };
+    const interfaces = lanIPv4Interfaces();
+    if (!this.socket) {
+      return { loopback: false, targets: interfaces.map((i) => ({ ...i, label: i.name, received: false })) };
+    }
 
-    this.selfTestState = { loopback: false, lan: false };
+    this.selfTestReceived = new Set();
     const sender = dgram.createSocket('udp4');
     await new Promise<void>((resolve) => sender.bind(0, () => resolve()));
 
-    const probe = (which: string, host: string): void => {
-      sender.send(encodeMessage(SELFTEST_ADDR, [{ type: 's', value: which }]), this.listenPort, host);
+    const probe = (tag: string, host: string): void => {
+      sender.send(encodeMessage(SELFTEST_ADDR, [{ type: 's', value: tag }]), this.listenPort, host);
     };
     probe('loopback', '127.0.0.1');
-    if (lanIp) probe('lan', lanIp);
+    for (const iface of interfaces) probe(iface.ip, iface.ip);
 
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    await new Promise((resolve) => setTimeout(resolve, 600));
     try {
       sender.close();
     } catch {
       /* ignore */
     }
 
-    const result: ReaperSelfTest = {
-      loopback: this.selfTestState.loopback,
-      lan: this.selfTestState.lan,
-      lanIp,
-    };
-    this.selfTestState = null;
-    return result;
+    const received = this.selfTestReceived;
+    this.selfTestReceived = null;
+    const targets: ReaperSelfTestTarget[] = interfaces.map((i) => ({
+      label: i.name,
+      ip: i.ip,
+      received: received.has(i.ip),
+    }));
+    return { loopback: received.has('loopback'), targets };
   }
 
   getTracks(): ReaperTrack[] {
@@ -212,11 +217,8 @@ export class ReaperService extends EventEmitter {
 
     // Internal self-test packets are recorded separately, not counted as Reaper traffic.
     if (messages.length === 1 && messages[0].address === SELFTEST_ADDR) {
-      const which = messages[0].args[0]?.value;
-      if (this.selfTestState && typeof which === 'string') {
-        if (which === 'loopback') this.selfTestState.loopback = true;
-        else if (which === 'lan') this.selfTestState.lan = true;
-      }
+      const tag = messages[0].args[0]?.value;
+      if (this.selfTestReceived && typeof tag === 'string') this.selfTestReceived.add(tag);
       return;
     }
 

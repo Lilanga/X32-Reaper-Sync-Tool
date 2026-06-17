@@ -1,13 +1,20 @@
 import { create } from 'zustand';
-import type { ReaperStatus, ReaperTrack, ReaperMonitor } from '@shared/ipc/contract';
+import type {
+  ReaperStatus,
+  ReaperTrack,
+  ReaperMonitor,
+  ReaperSelfTest,
+} from '@shared/ipc/contract';
 
 interface ReaperStoreState {
   status: ReaperStatus;
   tracks: ReaperTrack[];
   monitor: ReaperMonitor;
+  selfTest: ReaperSelfTest | null;
   setStatus: (status: ReaperStatus) => void;
   setTracks: (tracks: ReaperTrack[]) => void;
   setMonitor: (monitor: ReaperMonitor) => void;
+  setSelfTest: (selfTest: ReaperSelfTest | null) => void;
 }
 
 export const useReaperStore = create<ReaperStoreState>((set) => ({
@@ -23,9 +30,11 @@ export const useReaperStore = create<ReaperStoreState>((set) => ({
   },
   tracks: [],
   monitor: { packetsReceived: 0, recent: [] },
+  selfTest: null,
   setStatus: (status) => set({ status }),
   setTracks: (tracks) => set({ tracks }),
   setMonitor: (monitor) => set({ monitor }),
+  setSelfTest: (selfTest) => set({ selfTest }),
 }));
 
 export function isReaperLive(status: ReaperStatus): boolean {

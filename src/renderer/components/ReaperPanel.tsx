@@ -71,6 +71,7 @@ export function ReaperPanel() {
   const status = useReaperStore((s) => s.status);
   const tracks = useReaperStore((s) => s.tracks);
   const monitor = useReaperStore((s) => s.monitor);
+  const selfTest = useReaperStore((s) => s.selfTest);
   const live = isReaperLive(status);
   const receiving = monitor.packetsReceived > 0;
 
@@ -181,6 +182,41 @@ export function ReaperPanel() {
             <Activity className="h-3.5 w-3.5" />
             Run self-test (is the app reachable?)
           </Button>
+          {selfTest && (
+            <div className="space-y-1 rounded border border-border bg-background/40 p-2 text-[11px]">
+              <div className="font-medium text-muted-foreground">App reachability</div>
+              <div className="flex items-center justify-between">
+                <span>loopback · 127.0.0.1</span>
+                <span
+                  className={cn(
+                    'font-semibold',
+                    selfTest.loopback ? 'text-emerald-400' : 'text-red-400',
+                  )}
+                >
+                  {selfTest.loopback ? 'OK' : 'BLOCKED'}
+                </span>
+              </div>
+              {selfTest.targets.map((t) => (
+                <div key={t.ip} className="flex items-center justify-between gap-2">
+                  <span className="truncate" title={t.label}>
+                    {t.ip} <span className="text-muted-foreground">· {t.label}</span>
+                  </span>
+                  <span
+                    className={cn(
+                      'font-semibold',
+                      t.received ? 'text-emerald-400' : 'text-red-400',
+                    )}
+                  >
+                    {t.received ? 'OK' : 'BLOCKED'}
+                  </span>
+                </div>
+              ))}
+              <p className="text-[10px] text-muted-foreground">
+                Set Reaper&apos;s <b>Device IP</b> to an interface shown <b>OK</b>. If your real LAN
+                IP is <b>BLOCKED</b>, allow UDP {status.listenPort} in Windows Firewall.
+              </p>
+            </div>
+          )}
           {live && !receiving && (
             <p className="text-[11px] text-amber-400/90">
               Nothing from Reaper yet. Rename a track in Reaper to test — if this stays 0, Reaper
