@@ -49,15 +49,21 @@ export function Popover({
     const onKey = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') setOpen(false);
     };
+    const onScroll = (e: Event): void => {
+      const target = e.target as Node | null;
+      // Scrolling inside the popover (e.g. the icon grid) must NOT close it.
+      if (target && panelRef.current?.contains(target)) return;
+      setOpen(false);
+    };
     document.addEventListener('mousedown', onPointerDown);
     document.addEventListener('keydown', onKey);
-    window.addEventListener('scroll', close, true);
+    window.addEventListener('scroll', onScroll, true);
     return () => {
       document.removeEventListener('mousedown', onPointerDown);
       document.removeEventListener('keydown', onKey);
-      window.removeEventListener('scroll', close, true);
+      window.removeEventListener('scroll', onScroll, true);
     };
-  }, [open, close]);
+  }, [open]);
 
   return (
     <>

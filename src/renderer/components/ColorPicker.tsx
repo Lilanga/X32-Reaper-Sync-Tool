@@ -18,7 +18,7 @@ export function ColorSwatch({ color, className }: { color: X32Color; className?:
   }
   return (
     <span
-      className={cn('rounded', className)}
+      className={cn('inline-block rounded', className)}
       style={{
         backgroundColor: color.hex,
         boxShadow: color.inverted ? 'inset 0 0 0 2px rgba(255,255,255,0.85)' : undefined,
