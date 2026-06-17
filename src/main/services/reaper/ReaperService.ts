@@ -23,6 +23,9 @@ import type {
 const ACTION_REFRESH_SURFACES = 41743;
 
 const TRACK_NAME_RE = /^\/track\/(\d+)\/name$/;
+const SELECTED_TRACK_NAME = '/track/name';
+const TRACK_NUMBER_RE = /^\/track\/(\d+)\/number\/str$/;
+const SELECTED_TRACK_NUMBER = '/track/number/str';
 const SELFTEST_ADDR = '/x32sync/selftest';
 
 function summarizeArgs(args: OscArg[]): string {
@@ -43,6 +46,15 @@ function lanIPv4Interfaces(): Array<{ name: string; ip: string }> {
   return out;
 }
 
+function parseTrackIndex(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isInteger(value) && value > 0) return value;
+  if (typeof value !== 'string') return null;
+  const m = /^\s*(\d+)/.exec(value);
+  if (!m) return null;
+  const index = parseInt(m[1], 10);
+  return index > 0 ? index : null;
+}
+
 export interface ReaperConnectOptions {
   listenPort: number;
   reaperHost: string;
@@ -61,8 +73,11 @@ export class ReaperService extends EventEmitter {
   private packetsReceived = 0;
   private lastInboundAt: number | null = null;
   private readonly recent: ReaperMonitorEntry[] = [];
+  private readonly inboundHosts = new Set<string>();
+  private readonly trackNumberByDeviceIndex = new Map<number, number>();
   private monitorTimer: NodeJS.Timeout | null = null;
   private selfTestReceived: Set<string> | null = null;
+  private selectedTrackIndex: number | null = null;
 
   getStatus(): ReaperStatus {
     return {
@@ -92,10 +107,16 @@ export class ReaperService extends EventEmitter {
     this.packetsReceived = 0;
     this.lastInboundAt = null;
     this.recent.length = 0;
+    this.inboundHosts.clear();
+    this.trackNumberByDeviceIndex.clear();
+    this.selectedTrackIndex = null;
 
     try {
       await this.bind();
-      this.setState('listening', `Listening on UDP ${this.listenPort}`);
+      this.setState(
+        'listening',
+        `Listening on UDP ${this.listenPort}; refresh target ${this.reaperHost}:${this.reaperPort}`,
+      );
     } catch (err) {
       const e = err as NodeJS.ErrnoException;
       const hint =
@@ -131,7 +152,9 @@ export class ReaperService extends EventEmitter {
   /** Ask REAPER to re-send all track-name feedback. */
   refresh(): { ok: boolean; trackCount: number } {
     if (!this.socket) return { ok: false, trackCount: this.tracks.size };
-    this.send(encodeMessage('/action', [{ type: 'i', value: ACTION_REFRESH_SURFACES }]));
+    this.sendToRefreshTargets(
+      encodeMessage('/action', [{ type: 'i', value: ACTION_REFRESH_SURFACES }]),
+    );
     return { ok: true, trackCount: this.tracks.size };
   }
 
@@ -179,6 +202,24 @@ export class ReaperService extends EventEmitter {
       .map(([index, name]) => ({ index, name }));
   }
 
+  configureRemote(reaperHost: string, reaperPort: number): void {
+    this.reaperHost = reaperHost;
+    this.reaperPort = reaperPort;
+    this.emit('status', this.getStatus());
+  }
+
+  replaceTracks(tracks: ReaperTrack[]): void {
+    this.tracks.clear();
+    for (const track of tracks) {
+      if (Number.isInteger(track.index) && track.index > 0) {
+        this.tracks.set(track.index, track.name);
+      }
+    }
+    this.lastFeedbackAt = Date.now();
+    this.emit('tracks', this.getTracks());
+    this.emit('status', this.getStatus());
+  }
+
   // ---- internals ---------------------------------------------------------
 
   private bind(): Promise<void> {
@@ -193,7 +234,7 @@ export class ReaperService extends EventEmitter {
       const onListening = (): void => {
         socket.removeListener('error', onError);
         socket.on('error', (e) => this.onError(e));
-        socket.on('message', (msg) => this.onMessage(msg));
+        socket.on('message', (msg, rinfo) => this.onMessage(msg, rinfo));
         this.socket = socket;
         resolve();
       };
@@ -203,7 +244,7 @@ export class ReaperService extends EventEmitter {
     });
   }
 
-  private onMessage(buf: Buffer): void {
+  private onMessage(buf: Buffer, rinfo?: dgram.RemoteInfo): void {
     let messages;
     try {
       messages = decodePacket(buf);
@@ -224,15 +265,29 @@ export class ReaperService extends EventEmitter {
 
     this.packetsReceived++;
     this.lastInboundAt = Date.now();
+    if (rinfo?.address) this.inboundHosts.add(rinfo.address);
 
     let changed = false;
     for (const msg of messages) {
+      if (msg.address === SELECTED_TRACK_NUMBER) {
+        this.selectedTrackIndex = parseTrackIndex(msg.args[0]?.value);
+        continue;
+      }
+
+      const numbered = TRACK_NUMBER_RE.exec(msg.address);
+      if (numbered) {
+        const deviceIndex = parseInt(numbered[1], 10);
+        const trackIndex = parseTrackIndex(msg.args[0]?.value);
+        if (trackIndex) this.trackNumberByDeviceIndex.set(deviceIndex, trackIndex);
+      }
+    }
+
+    for (const msg of messages) {
       this.pushRecent(msg.address, summarizeArgs(msg.args));
-      const m = TRACK_NAME_RE.exec(msg.address);
-      if (!m || msg.args.length === 0) continue;
+      const index = this.trackIndexFromNameMessage(msg.address);
+      if (!index || msg.args.length === 0) continue;
       const value = msg.args[0].value;
       if (typeof value !== 'string') continue;
-      const index = parseInt(m[1], 10);
       if (this.tracks.get(index) !== value) {
         this.tracks.set(index, value);
         changed = true;
@@ -252,6 +307,16 @@ export class ReaperService extends EventEmitter {
     if (this.recent.length > 25) this.recent.length = 25;
   }
 
+  private trackIndexFromNameMessage(address: string): number | null {
+    const numbered = TRACK_NAME_RE.exec(address);
+    if (numbered) {
+      const deviceIndex = parseInt(numbered[1], 10);
+      return this.trackNumberByDeviceIndex.get(deviceIndex) ?? deviceIndex;
+    }
+    if (address === SELECTED_TRACK_NAME) return this.selectedTrackIndex;
+    return null;
+  }
+
   /** Throttle monitor emits so a refresh burst doesn't flood IPC. */
   private scheduleMonitor(): void {
     if (this.monitorTimer) return;
@@ -261,8 +326,26 @@ export class ReaperService extends EventEmitter {
     }, 150);
   }
 
-  private send(buf: Buffer): void {
-    this.socket?.send(buf, this.reaperPort, this.reaperHost);
+  private refreshTargetHosts(): string[] {
+    const hosts = new Set<string>();
+    if (this.reaperHost) hosts.add(this.reaperHost);
+    for (const host of this.inboundHosts) hosts.add(host);
+
+    // Before any inbound packet, we do not know whether REAPER's OSC listener is
+    // bound to loopback or a LAN interface. Probe all local interfaces so Refresh
+    // still works when REAPER was configured with "Local IP" = the LAN address.
+    if (this.packetsReceived === 0) {
+      hosts.add('127.0.0.1');
+      for (const iface of lanIPv4Interfaces()) hosts.add(iface.ip);
+    }
+
+    return [...hosts];
+  }
+
+  private sendToRefreshTargets(buf: Buffer): void {
+    for (const host of this.refreshTargetHosts()) {
+      this.socket?.send(buf, this.reaperPort, host);
+    }
   }
 
   private onError(err: Error): void {

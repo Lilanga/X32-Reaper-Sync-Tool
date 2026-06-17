@@ -140,6 +140,10 @@ export interface IpcContract {
   'reaper:refresh': { req: void; res: { ok: boolean; trackCount: number } };
   'reaper:getTracks': { req: void; res: { tracks: ReaperTrack[] } };
   'reaper:installPattern': { req: void; res: { ok: boolean; path: string; error?: string } };
+  'reaper:importProject': {
+    req: void;
+    res: { ok: boolean; path?: string; trackCount: number; error?: string };
+  };
   'reaper:selfTest': { req: void; res: ReaperSelfTest };
 }
 

@@ -19,6 +19,7 @@ export const IPC = {
   reaperRefresh: 'reaper:refresh',
   reaperGetTracks: 'reaper:getTracks',
   reaperInstallPattern: 'reaper:installPattern',
+  reaperImportProject: 'reaper:importProject',
   reaperSelfTest: 'reaper:selfTest',
 } as const;
 

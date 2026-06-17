@@ -133,6 +133,15 @@ export async function installReaperPattern(): Promise<void> {
   else toast(`Install failed: ${res.error ?? 'unknown error'}`, 'error');
 }
 
+export async function importReaperProject(): Promise<void> {
+  const res = await invoke('reaper:importProject');
+  if (!res.ok) {
+    if (res.error) toast(`Project import failed: ${res.error}`, 'error');
+    return;
+  }
+  toast(`Imported ${res.trackCount} track name${res.trackCount === 1 ? '' : 's'} from project`, 'success');
+}
+
 /** Apply received Reaper track names onto channels 1:1 (track N → channel N). */
 export function applyReaperToGrid(): void {
   const { tracks } = useReaperStore.getState();

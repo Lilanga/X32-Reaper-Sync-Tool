@@ -49,6 +49,60 @@ describe('ReaperService', () => {
     expect(svc.getMonitor().recent.some((e) => e.addr === '/track/1/name')).toBe(true);
   });
 
+  it('ingests selected-track /track/name feedback when Reaper sends the track number', async () => {
+    svc = new ReaperService();
+    const status = await svc.start({
+      listenPort: LISTEN,
+      reaperHost: '127.0.0.1',
+      reaperPort: REAPER,
+    });
+    expect(status.state).toBe('listening');
+
+    const sender = dgram.createSocket('udp4');
+    extra = sender;
+
+    const firstTracks = new Promise((resolve) => svc!.once('tracks', resolve));
+    sender.send(
+      encodeMessage('/track/number/str', [{ type: 's', value: '3' }]),
+      LISTEN,
+      '127.0.0.1',
+    );
+    await new Promise((r) => setTimeout(r, 20));
+    sender.send(encodeMessage('/track/name', [{ type: 's', value: 'BVox' }]), LISTEN, '127.0.0.1');
+    await firstTracks;
+
+    expect(svc.getTracks()).toContainEqual({ index: 3, name: 'BVox' });
+  });
+
+  it('uses /track/N/number/str to resolve banked track-name feedback', async () => {
+    svc = new ReaperService();
+    const status = await svc.start({
+      listenPort: LISTEN,
+      reaperHost: '127.0.0.1',
+      reaperPort: REAPER,
+    });
+    expect(status.state).toBe('listening');
+
+    const sender = dgram.createSocket('udp4');
+    extra = sender;
+
+    const firstTracks = new Promise((resolve) => svc!.once('tracks', resolve));
+    sender.send(
+      encodeMessage('/track/1/number/str', [{ type: 's', value: '9' }]),
+      LISTEN,
+      '127.0.0.1',
+    );
+    await new Promise((r) => setTimeout(r, 20));
+    sender.send(
+      encodeMessage('/track/1/name', [{ type: 's', value: 'Banked Vox' }]),
+      LISTEN,
+      '127.0.0.1',
+    );
+    await firstTracks;
+
+    expect(svc.getTracks()).toContainEqual({ index: 9, name: 'Banked Vox' });
+  });
+
   it('refresh() sends /action 41743 to Reaper', async () => {
     const reaper = dgram.createSocket('udp4');
     extra = reaper;

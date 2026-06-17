@@ -4,10 +4,15 @@
  * (Settings persistence with electron-store arrives in M6.)
  */
 
+import { dialog } from 'electron';
+import { readFile } from 'node:fs/promises';
+
 import { X32Client, type PushStripRequest } from './osc/X32Client';
 import { X32Simulator } from './simulator/X32Simulator';
 import { ReaperService } from './reaper/ReaperService';
+import { detectReaperOscConfig } from './reaper/reaperConfig';
 import { installReaperPattern } from './reaper/reaperPaths';
+import { parseRppTrackNames } from './reaper/rppParser';
 import { EVENTS } from '@shared/ipc/channels';
 import type { BankId, StripField } from '@shared/x32/banks';
 import type { ChannelStripValue } from '@shared/model/channelStrip';
@@ -134,14 +139,15 @@ export class ServiceHub {
     return this.client.pushBank(req.bankId, req.strips, req.fields);
   }
 
-  reaperConnect(req: {
+  async reaperConnect(req: {
     listenPort?: number;
     reaperHost?: string;
     reaperPort?: number;
   }): Promise<ReaperStatus> {
-    const listenPort = req.listenPort ?? this.settings.reaperListenPort;
-    const reaperHost = req.reaperHost ?? this.settings.reaperHost;
-    const reaperPort = req.reaperPort ?? this.settings.reaperPort;
+    const detected = await detectReaperOscConfig();
+    const listenPort = req.listenPort ?? detected?.devicePort ?? this.settings.reaperListenPort;
+    const reaperHost = req.reaperHost ?? detected?.deviceHost ?? this.settings.reaperHost;
+    const reaperPort = req.reaperPort ?? detected?.localListenPort ?? this.settings.reaperPort;
     this.settings = { ...this.settings, reaperListenPort: listenPort, reaperHost, reaperPort };
     return this.reaper.start({ listenPort, reaperHost, reaperPort });
   }
@@ -151,7 +157,17 @@ export class ServiceHub {
     return this.reaper.getStatus();
   }
 
-  reaperRefresh(): { ok: boolean; trackCount: number } {
+  async reaperRefresh(): Promise<{ ok: boolean; trackCount: number }> {
+    const detected = await detectReaperOscConfig();
+    if (detected) {
+      this.settings = {
+        ...this.settings,
+        reaperListenPort: detected.devicePort,
+        reaperHost: detected.deviceHost,
+        reaperPort: detected.localListenPort,
+      };
+      this.reaper.configureRemote(detected.deviceHost, detected.localListenPort);
+    }
     return this.reaper.refresh();
   }
 
@@ -165,6 +181,36 @@ export class ServiceHub {
 
   reaperSelfTest(): Promise<ReaperSelfTest> {
     return this.reaper.selfTest();
+  }
+
+  async reaperImportProject(): Promise<{ ok: boolean; path?: string; trackCount: number; error?: string }> {
+    const res = await dialog.showOpenDialog({
+      title: 'Import REAPER project track names',
+      properties: ['openFile'],
+      filters: [
+        { name: 'REAPER projects', extensions: ['rpp', 'rpp-bak'] },
+        { name: 'All files', extensions: ['*'] },
+      ],
+    });
+
+    if (res.canceled || res.filePaths.length === 0) {
+      return { ok: false, trackCount: this.reaper.getTracks().length };
+    }
+
+    const path = res.filePaths[0];
+    try {
+      const rpp = await readFile(path, 'utf8');
+      const tracks = parseRppTrackNames(rpp);
+      this.reaper.replaceTracks(tracks);
+      return { ok: true, path, trackCount: tracks.length };
+    } catch (err) {
+      return {
+        ok: false,
+        path,
+        trackCount: this.reaper.getTracks().length,
+        error: (err as Error).message,
+      };
+    }
   }
 
   private async ensureSimulator(): Promise<void> {

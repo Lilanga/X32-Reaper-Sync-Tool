@@ -4,6 +4,7 @@ import {
   RefreshCw,
   ArrowRightLeft,
   FolderInput,
+  FileUp,
   CircleSlash,
   Activity,
 } from 'lucide-react';
@@ -16,6 +17,7 @@ import {
   reaperDisconnect,
   reaperRefresh,
   installReaperPattern,
+  importReaperProject,
   applyReaperToGrid,
   reaperSelfTest,
 } from '@renderer/api/actions';
@@ -45,6 +47,12 @@ function ReaperSetup({ status }: { status: ReaperStatus }) {
         </li>
         <li>
           <b>Local listen port</b> (app → Reaper): <b>{status.reaperPort}</b>
+          {status.reaperHost && (
+            <>
+              {' '}
+              at <b>{status.reaperHost}</b>
+            </>
+          )}
         </li>
         <li>
           Pattern config: <b>X32SyncTool.ReaperOSC</b>; tick{' '}
@@ -123,11 +131,15 @@ export function ReaperPanel() {
             </div>
             <Button
               variant="secondary"
-              disabled={!tracks.length}
               onClick={() => applyReaperToGrid()}
+              disabled={!tracks.length}
             >
               <ArrowRightLeft className="h-4 w-4" />
               Apply names → channels
+            </Button>
+            <Button variant="outline" onClick={() => void importReaperProject()}>
+              <FileUp className="h-4 w-4" />
+              Import .RPP names
             </Button>
             <p className="text-[11px] text-muted-foreground">
               Listening on UDP {status.listenPort} · {tracks.length} track
@@ -140,6 +152,10 @@ export function ReaperPanel() {
             <Button onClick={() => void reaperConnect()}>
               <Plug className="h-4 w-4" />
               Start listening
+            </Button>
+            <Button variant="outline" onClick={() => void importReaperProject()}>
+              <FileUp className="h-4 w-4" />
+              Import .RPP names
             </Button>
             {status.state === 'error' && (
               <p className="text-[11px] text-red-400">{status.message}</p>

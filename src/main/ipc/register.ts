@@ -93,5 +93,6 @@ export function registerIpc(hub: ServiceHub): void {
   ipcMain.handle(IPC.reaperRefresh, () => hub.reaperRefresh());
   ipcMain.handle(IPC.reaperGetTracks, () => hub.reaperGetTracks());
   ipcMain.handle(IPC.reaperInstallPattern, () => hub.reaperInstallPattern());
+  ipcMain.handle(IPC.reaperImportProject, () => hub.reaperImportProject());
   ipcMain.handle(IPC.reaperSelfTest, () => hub.reaperSelfTest());
 }
