@@ -1,0 +1,33 @@
+# X32 Reaper Sync Tool — REAPER OSC pattern configuration
+# =======================================================
+# Install this file to REAPER's OSC folder (the app's "Install pattern file"
+# button does this for you):
+#     Windows   %APPDATA%\REAPER\OSC\
+#     macOS     ~/Library/Application Support/REAPER/OSC/
+#     Linux     ~/.config/REAPER/OSC/
+#
+# Then in REAPER:
+#   Preferences > Control/OSC/web > Add > OSC (Open Sound Control)
+#     Mode:               Configure device IP + local port
+#     Device port:        9000   (REAPER -> this app; the app's listen port)
+#     Device IP:          the machine running this app (127.0.0.1 if same PC)
+#     Local listen port:  8000   (this app -> REAPER; for the Refresh action)
+#     Pattern config:     X32SyncTool.ReaperOSC   (this file)
+#   Enable "Allow binding messages to REAPER actions and FX learn".
+
+# Report up to 64 tracks (default is only 8). Raise if your sessions are larger.
+DEVICE_TRACK_COUNT 64
+DEVICE_SEND_COUNT 0
+DEVICE_RECEIVE_COUNT 0
+DEVICE_FX_COUNT 0
+DEVICE_FX_PARAM_COUNT 0
+
+# Track-name feedback the app consumes. The @ wildcard expands to the track
+# index, so REAPER emits /track/1/name, /track/2/name, /track/3/name, ...
+TRACK_NAME s/track/name s/track/@/name
+TRACK_NUMBER s/track/number/str s/track/@/number/str
+
+# Lets the app trigger REAPER actions. The app sends /action with integer 41743
+# ("Control surface: Refresh all surfaces") to force REAPER to re-send all
+# track-name feedback on demand (the "Refresh from Reaper" button).
+ACTION i/action s/action/str t/action/@ f/action/@/cc

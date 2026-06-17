@@ -32,6 +32,7 @@ interface ChannelState {
   setName: (index: number, name: string) => void;
   setColor: (index: number, color: number) => void;
   setIcon: (index: number, icon: number) => void;
+  applyReaperNames: (entries: Array<{ index: number; name: string }>) => void;
   applyConsoleChange: (index: number, field: StripField, value: string | number) => void;
   markClean: (index: number) => void;
   markAllClean: () => void;
@@ -88,6 +89,17 @@ export const useChannelStore = create<ChannelState>()(
         cur.icon = icon;
         s.dirty[index] = true;
         s.source[index] = 'user';
+      }),
+
+    applyReaperNames: (entries) =>
+      set((s) => {
+        for (const entry of entries) {
+          const cur = s.strips[entry.index - 1];
+          if (!cur) continue;
+          cur.name = entry.name;
+          s.dirty[entry.index] = true;
+          s.source[entry.index] = 'reaper';
+        }
       }),
 
     applyConsoleChange: (index, field, value) =>

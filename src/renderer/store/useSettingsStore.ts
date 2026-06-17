@@ -5,6 +5,8 @@ const DEFAULTS: Settings = {
   lastConsoleIp: '',
   consolePort: 10023,
   reaperListenPort: 9000,
+  reaperHost: '127.0.0.1',
+  reaperPort: 8000,
   simulatorEnabled: true,
   simulatorPort: 10023,
   theme: 'dark',

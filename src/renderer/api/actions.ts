@@ -7,7 +7,10 @@ import { invoke } from './client';
 import { useChannelStore } from '@renderer/store/useChannelStore';
 import { useConnectionStore } from '@renderer/store/useConnectionStore';
 import { useSettingsStore } from '@renderer/store/useSettingsStore';
+import { useReaperStore } from '@renderer/store/useReaperStore';
 import { toast } from '@renderer/store/useToastStore';
+import { BANKS } from '@shared/x32/banks';
+import { sanitizeName } from '@shared/validation/name';
 
 export async function connectConsole(): Promise<void> {
   const { settings } = useSettingsStore.getState();
@@ -80,4 +83,51 @@ export async function pushStrip(index: number): Promise<void> {
     res.truncated ? `Ch ${index} pushed · truncated to 12 chars` : `Ch ${index} pushed`,
     res.truncated ? 'warning' : 'success',
   );
+}
+
+// ---- Reaper -------------------------------------------------------------
+
+export async function reaperConnect(): Promise<void> {
+  const status = await invoke('reaper:connect', {});
+  useReaperStore.getState().setStatus(status);
+  if (status.state === 'listening') {
+    toast(`Listening for Reaper on UDP ${status.listenPort}`, 'success');
+  } else if (status.state === 'error') {
+    toast(status.message ?? 'Could not start Reaper listener', 'error');
+  }
+}
+
+export async function reaperDisconnect(): Promise<void> {
+  const status = await invoke('reaper:disconnect');
+  useReaperStore.getState().setStatus(status);
+}
+
+export async function reaperRefresh(): Promise<void> {
+  const res = await invoke('reaper:refresh');
+  if (!res.ok) {
+    toast('Start the Reaper listener first', 'error');
+    return;
+  }
+  toast('Asked Reaper to resend track names…');
+}
+
+export async function installReaperPattern(): Promise<void> {
+  const res = await invoke('reaper:installPattern');
+  if (res.ok) toast(`Installed pattern file → ${res.path}`, 'success');
+  else toast(`Install failed: ${res.error ?? 'unknown error'}`, 'error');
+}
+
+/** Apply received Reaper track names onto channels 1:1 (track N → channel N). */
+export function applyReaperToGrid(): void {
+  const { tracks } = useReaperStore.getState();
+  const max = BANKS.ch.count;
+  const entries = tracks
+    .filter((t) => t.index >= 1 && t.index <= max && t.name.trim() !== '')
+    .map((t) => ({ index: t.index, name: sanitizeName(t.name).name }));
+  if (entries.length === 0) {
+    toast('No Reaper track names yet — click Refresh first', 'warning');
+    return;
+  }
+  useChannelStore.getState().applyReaperNames(entries);
+  toast(`Applied ${entries.length} Reaper name${entries.length === 1 ? '' : 's'} to channels`, 'success');
 }

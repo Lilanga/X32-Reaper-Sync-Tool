@@ -6,6 +6,8 @@
 
 import { X32Client, type PushStripRequest } from './osc/X32Client';
 import { X32Simulator } from './simulator/X32Simulator';
+import { ReaperService } from './reaper/ReaperService';
+import { installReaperPattern } from './reaper/reaperPaths';
 import { EVENTS } from '@shared/ipc/channels';
 import type { BankId, StripField } from '@shared/x32/banks';
 import type { ChannelStripValue } from '@shared/model/channelStrip';
@@ -15,6 +17,8 @@ import type {
   PushBankResult,
   PushStripResult,
   ReadBankResult,
+  ReaperStatus,
+  ReaperTrack,
   Settings,
 } from '@shared/ipc/contract';
 import { logger } from '../util/logger';
@@ -26,6 +30,8 @@ function defaultSettings(): Settings {
     lastConsoleIp: '',
     consolePort: 10023,
     reaperListenPort: 9000,
+    reaperHost: '127.0.0.1',
+    reaperPort: 8000,
     simulatorEnabled: true,
     simulatorPort: 10023,
     theme: 'dark',
@@ -34,6 +40,7 @@ function defaultSettings(): Settings {
 
 export class ServiceHub {
   readonly client = new X32Client();
+  readonly reaper = new ReaperService();
   private simulator: X32Simulator | null = null;
   private settings: Settings = defaultSettings();
 
@@ -44,10 +51,23 @@ export class ServiceHub {
       logger.log(`[x32] ${line.message}`);
       this.send(EVENTS.logLine, line);
     });
+
+    this.reaper.on('status', (status: ReaperStatus) => this.send(EVENTS.reaperStatus, status));
+    this.reaper.on('tracks', (tracks: ReaperTrack[]) =>
+      this.send(EVENTS.reaperTracks, { tracks }),
+    );
+    this.reaper.on('log', (line: { level: 'info' | 'warn' | 'error'; message: string }) => {
+      logger.log(`[reaper] ${line.message}`);
+      this.send(EVENTS.logLine, line);
+    });
   }
 
   getState(): AppState {
-    return { settings: this.settings, connection: this.client.getStatus() };
+    return {
+      settings: this.settings,
+      connection: this.client.getStatus(),
+      reaper: this.reaper.getStatus(),
+    };
   }
 
   getSettings(): Settings {
@@ -109,6 +129,35 @@ export class ServiceHub {
     return this.client.pushBank(req.bankId, req.strips, req.fields);
   }
 
+  reaperConnect(req: {
+    listenPort?: number;
+    reaperHost?: string;
+    reaperPort?: number;
+  }): Promise<ReaperStatus> {
+    const listenPort = req.listenPort ?? this.settings.reaperListenPort;
+    const reaperHost = req.reaperHost ?? this.settings.reaperHost;
+    const reaperPort = req.reaperPort ?? this.settings.reaperPort;
+    this.settings = { ...this.settings, reaperListenPort: listenPort, reaperHost, reaperPort };
+    return this.reaper.start({ listenPort, reaperHost, reaperPort });
+  }
+
+  reaperDisconnect(): ReaperStatus {
+    this.reaper.stop();
+    return this.reaper.getStatus();
+  }
+
+  reaperRefresh(): { ok: boolean; trackCount: number } {
+    return this.reaper.refresh();
+  }
+
+  reaperGetTracks(): { tracks: ReaperTrack[] } {
+    return { tracks: this.reaper.getTracks() };
+  }
+
+  reaperInstallPattern(): Promise<{ ok: boolean; path: string; error?: string }> {
+    return installReaperPattern();
+  }
+
   private async ensureSimulator(): Promise<void> {
     if (!this.simulator) this.simulator = new X32Simulator(this.settings.simulatorPort);
     await this.simulator.start();
@@ -116,6 +165,7 @@ export class ServiceHub {
 
   dispose(): void {
     this.client.disconnect(true);
+    this.reaper.stop(true);
     this.simulator?.stop();
   }
 }

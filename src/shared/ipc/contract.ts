@@ -27,15 +27,37 @@ export interface ConnectionStatus {
 export interface Settings {
   lastConsoleIp: string;
   consolePort: number;
+  /** Port THIS app listens on for Reaper's track-name feedback (Reaper's "Device port"). */
   reaperListenPort: number;
+  /** Where Reaper is reachable for the Refresh action (Reaper's "local listen port"). */
+  reaperHost: string;
+  reaperPort: number;
   simulatorEnabled: boolean;
   simulatorPort: number;
   theme: 'dark' | 'light' | 'system';
 }
 
+export type ReaperState = 'stopped' | 'listening' | 'error';
+
+export interface ReaperStatus {
+  state: ReaperState;
+  message?: string;
+  listenPort: number;
+  reaperHost: string;
+  reaperPort: number;
+  trackCount: number;
+  lastFeedbackAt: number | null;
+}
+
+export interface ReaperTrack {
+  index: number;
+  name: string;
+}
+
 export interface AppState {
   settings: Settings;
   connection: ConnectionStatus;
+  reaper: ReaperStatus;
 }
 
 export interface PushStripResult {
@@ -78,6 +100,15 @@ export interface IpcContract {
   'sim:setEnabled': { req: { enabled: boolean }; res: { enabled: boolean } };
   'settings:get': { req: void; res: Settings };
   'settings:set': { req: Partial<Settings>; res: Settings };
+
+  'reaper:connect': {
+    req: { listenPort?: number; reaperHost?: string; reaperPort?: number };
+    res: ReaperStatus;
+  };
+  'reaper:disconnect': { req: void; res: ReaperStatus };
+  'reaper:refresh': { req: void; res: { ok: boolean; trackCount: number } };
+  'reaper:getTracks': { req: void; res: { tracks: ReaperTrack[] } };
+  'reaper:installPattern': { req: void; res: { ok: boolean; path: string; error?: string } };
 }
 
 export type IpcChannel = keyof IpcContract;
@@ -91,6 +122,8 @@ export interface EventContract {
     field: StripField;
     value: string | number;
   };
+  'reaper:status': ReaperStatus;
+  'reaper:tracks': { tracks: ReaperTrack[] };
   'log:line': { level: 'info' | 'warn' | 'error'; message: string };
 }
 

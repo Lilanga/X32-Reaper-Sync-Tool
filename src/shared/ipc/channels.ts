@@ -14,11 +14,18 @@ export const IPC = {
   simSetEnabled: 'sim:setEnabled',
   settingsGet: 'settings:get',
   settingsSet: 'settings:set',
+  reaperConnect: 'reaper:connect',
+  reaperDisconnect: 'reaper:disconnect',
+  reaperRefresh: 'reaper:refresh',
+  reaperGetTracks: 'reaper:getTracks',
+  reaperInstallPattern: 'reaper:installPattern',
 } as const;
 
 export const EVENTS = {
   consoleStatus: 'console:status',
   consoleChanged: 'console:changed',
+  reaperStatus: 'reaper:status',
+  reaperTracks: 'reaper:tracks',
   logLine: 'log:line',
 } as const;
 

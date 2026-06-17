@@ -48,9 +48,16 @@ const settingsPatchSchema = z.object({
   lastConsoleIp: z.string().optional(),
   consolePort: z.number().int().positive().optional(),
   reaperListenPort: z.number().int().positive().optional(),
+  reaperHost: z.string().optional(),
+  reaperPort: z.number().int().positive().optional(),
   simulatorEnabled: z.boolean().optional(),
   simulatorPort: z.number().int().positive().optional(),
   theme: z.enum(['dark', 'light', 'system']).optional(),
+});
+const reaperConnectSchema = z.object({
+  listenPort: z.number().int().positive().optional(),
+  reaperHost: z.string().optional(),
+  reaperPort: z.number().int().positive().optional(),
 });
 
 export function registerIpc(hub: ServiceHub): void {
@@ -80,4 +87,10 @@ export function registerIpc(hub: ServiceHub): void {
   ipcMain.handle(IPC.simSetEnabled, (_e, raw) => hub.setSimEnabled(simSchema.parse(raw).enabled));
   ipcMain.handle(IPC.settingsGet, () => hub.getSettings());
   ipcMain.handle(IPC.settingsSet, (_e, raw) => hub.setSettings(settingsPatchSchema.parse(raw)));
+
+  ipcMain.handle(IPC.reaperConnect, (_e, raw) => hub.reaperConnect(reaperConnectSchema.parse(raw)));
+  ipcMain.handle(IPC.reaperDisconnect, () => hub.reaperDisconnect());
+  ipcMain.handle(IPC.reaperRefresh, () => hub.reaperRefresh());
+  ipcMain.handle(IPC.reaperGetTracks, () => hub.reaperGetTracks());
+  ipcMain.handle(IPC.reaperInstallPattern, () => hub.reaperInstallPattern());
 }
