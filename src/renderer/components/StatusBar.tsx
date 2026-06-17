@@ -12,10 +12,14 @@ const STATE_TEXT: Record<ConnectionStatus['state'], string> = {
 
 export function StatusBar() {
   const status = useConnectionStore((s) => s.status);
-  const dirty = useChannelStore(
-    (s) => Object.values(s.dirty).filter((f) => hasDirtyField(f)).length,
-  );
-  const unresolved = useChannelStore((s) => s.unresolved.length);
+  const dirty = useChannelStore((s) => {
+    let n = 0;
+    for (const bank of Object.values(s.banks)) {
+      for (const flags of Object.values(bank.dirty)) if (hasDirtyField(flags)) n++;
+    }
+    return n;
+  });
+  const unresolved = useChannelStore((s) => s.banks[s.activeBank].unresolved.length);
 
   return (
     <footer className="flex items-center gap-3 border-t border-border bg-card/60 px-4 py-1.5 text-xs text-muted-foreground">

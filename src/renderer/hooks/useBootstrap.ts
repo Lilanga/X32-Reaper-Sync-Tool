@@ -29,10 +29,9 @@ export function useBootstrap(): void {
       useConnectionStore.getState().setStatus(status);
     });
     const offChanged = onEvent('console:changed', (change) => {
-      const store = useChannelStore.getState();
-      if (change.bankId === store.bankId) {
-        store.applyConsoleChange(change.index, change.field, change.value);
-      }
+      useChannelStore
+        .getState()
+        .applyConsoleChange(change.bankId, change.index, change.field, change.value);
     });
     const offReaperStatus = onEvent('reaper:status', (status) => {
       useReaperStore.getState().setStatus(status);

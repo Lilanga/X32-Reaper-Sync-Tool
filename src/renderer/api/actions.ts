@@ -9,7 +9,7 @@ import { useConnectionStore } from '@renderer/store/useConnectionStore';
 import { useSettingsStore } from '@renderer/store/useSettingsStore';
 import { useReaperStore } from '@renderer/store/useReaperStore';
 import { toast } from '@renderer/store/useToastStore';
-import { BANKS, type StripField } from '@shared/x32/banks';
+import { BANKS, type StripField, type BankId } from '@shared/x32/banks';
 import { sanitizeName } from '@shared/validation/name';
 import type { ReaperTrack, DiscoveredConsole } from '@shared/ipc/contract';
 
@@ -59,55 +59,60 @@ export async function connectToConsole(ip: string): Promise<void> {
 }
 
 export async function pullFromConsole(): Promise<void> {
-  const { bankId } = useChannelStore.getState();
+  const bankId = useChannelStore.getState().activeBank;
   const res = await invoke('console:readBank', { bankId, fields: ALL_FIELDS });
-  useChannelStore.getState().setStrips(res.strips, 'console', ALL_FIELDS, res.unresolved);
+  useChannelStore.getState().setStrips(bankId, res.strips, 'console', ALL_FIELDS, res.unresolved);
   toast(
-    `Pulled name, color & icon for ${res.strips.length} channels` +
+    `Pulled ${BANKS[bankId].label} — name, color & icon for ${res.strips.length} strip${res.strips.length === 1 ? '' : 's'}` +
       (res.unresolved.length ? ` · ${res.unresolved.length} value(s) unread` : ''),
     res.unresolved.length ? 'warning' : 'success',
   );
 }
 
 export async function pushAll(): Promise<void> {
-  const { bankId, strips, dirty } = useChannelStore.getState();
-  const dirtyStrips = strips.filter((s) => hasDirtyField(dirty[s.index]));
-  if (dirtyStrips.length === 0) {
+  const { banks } = useChannelStore.getState();
+  const jobs = (Object.keys(banks) as BankId[]).flatMap((bankId) =>
+    banks[bankId].strips
+      .filter((strip) => hasDirtyField(banks[bankId].dirty[strip.index]))
+      .map((strip) => ({ bankId, strip, flags: banks[bankId].dirty[strip.index] ?? {} })),
+  );
+  if (jobs.length === 0) {
     toast('No unsaved edits to push', 'default');
     return;
   }
   const results = await Promise.all(
-    dirtyStrips.map((s) => {
-      const flags = dirty[s.index] ?? {};
-      return invoke('console:pushStrip', {
-        bankId,
-        index: s.index,
-        name: flags.name ? s.name : undefined,
-        color: flags.color ? s.color : undefined,
-        icon: flags.icon ? s.icon : undefined,
-      }).then((res) => ({ index: s.index, res }));
-    }),
+    jobs.map((j) =>
+      invoke('console:pushStrip', {
+        bankId: j.bankId,
+        index: j.strip.index,
+        name: j.flags.name ? j.strip.name : undefined,
+        color: j.flags.color ? j.strip.color : undefined,
+        icon: j.flags.icon ? j.strip.icon : undefined,
+      }).then((res) => ({ job: j, res })),
+    ),
   );
   if (results.some((r) => !r.res.ok)) {
     toast('Push failed — not connected', 'error');
     return;
   }
-  for (const r of results) useChannelStore.getState().markStripClean(r.index);
+  for (const r of results) {
+    useChannelStore.getState().markStripClean(r.job.bankId, r.job.strip.index);
+  }
   const truncated = results.filter((r) => r.res.truncated).length;
   toast(
-    `Pushed ${results.length} channel${results.length === 1 ? '' : 's'}` +
+    `Pushed ${results.length} strip${results.length === 1 ? '' : 's'}` +
       (truncated ? ` · ${truncated} name(s) truncated to 12` : ''),
     truncated ? 'warning' : 'success',
   );
 }
 
-export async function pushStrip(index: number): Promise<void> {
-  const { bankId, strips, dirty } = useChannelStore.getState();
-  const strip = strips[index - 1];
+export async function pushStrip(bankId: BankId, index: number): Promise<void> {
+  const bank = useChannelStore.getState().banks[bankId];
+  const strip = bank.strips[index - 1];
   if (!strip) return;
-  const flags = dirty[index];
+  const flags = bank.dirty[index];
   if (!hasDirtyField(flags)) {
-    toast(`Ch ${index}: no unsaved changes`, 'default');
+    toast(`${BANKS[bankId].short} ${index}: no unsaved changes`, 'default');
     return;
   }
   const f = flags ?? {};
@@ -122,9 +127,11 @@ export async function pushStrip(index: number): Promise<void> {
     toast('Push failed — not connected', 'error');
     return;
   }
-  useChannelStore.getState().markStripClean(index);
+  useChannelStore.getState().markStripClean(bankId, index);
   toast(
-    res.truncated ? `Ch ${index} pushed · name truncated to 12` : `Ch ${index} pushed`,
+    res.truncated
+      ? `${BANKS[bankId].short} ${index} pushed · name truncated`
+      : `${BANKS[bankId].short} ${index} pushed`,
     res.truncated ? 'warning' : 'success',
   );
 }
@@ -183,7 +190,11 @@ function applyTracksToGrid(tracks: ReaperTrack[]): number {
   const entries = tracks
     .filter((t) => t.index >= 1 && t.index <= max && t.name.trim() !== '')
     .map((t) => ({ index: t.index, name: sanitizeName(t.name).name }));
-  if (entries.length) useChannelStore.getState().applyReaperNames(entries);
+  if (entries.length) {
+    // Reaper tracks map to the input-channel bank.
+    useChannelStore.getState().applyReaperNames('ch', entries);
+    useChannelStore.getState().setActiveBank('ch');
+  }
   return entries.length;
 }
 

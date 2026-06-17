@@ -9,18 +9,26 @@ import { IconPicker } from '@renderer/components/IconPicker';
 import { useChannelStore, hasDirtyField } from '@renderer/store/useChannelStore';
 import { useConnectionStore, isLive } from '@renderer/store/useConnectionStore';
 import { pushStrip } from '@renderer/api/actions';
+import { BANKS, type BankId } from '@shared/x32/banks';
 import { NAME_MAX, sanitizeName } from '@shared/validation/name';
 
-const ROW_COLS = 'grid-cols-[2.25rem_1.75rem_2.5rem_1fr_4.75rem]';
+export const ROW_COLS = 'grid-cols-[2.25rem_1.75rem_2.5rem_1fr_4.75rem]';
 
-export const ChannelRow = React.memo(function ChannelRow({ index }: { index: number }) {
-  const strip = useChannelStore((s) => s.strips[index - 1]);
-  const dirtyFlags = useChannelStore((s) => s.dirty[index]);
+export const ChannelRow = React.memo(function ChannelRow({
+  bankId,
+  index,
+}: {
+  bankId: BankId;
+  index: number;
+}) {
+  const strip = useChannelStore((s) => s.banks[bankId].strips[index - 1]);
+  const dirtyFlags = useChannelStore((s) => s.banks[bankId].dirty[index]);
   const setName = useChannelStore((s) => s.setName);
   const setColor = useChannelStore((s) => s.setColor);
   const setIcon = useChannelStore((s) => s.setIcon);
   const live = useConnectionStore((s) => isLive(s.status));
 
+  const supportsIcon = BANKS[bankId].supportsIcon;
   const dirty = hasDirtyField(dirtyFlags);
   const len = strip.name.length;
   const atLimit = len >= NAME_MAX;
@@ -38,11 +46,18 @@ export const ChannelRow = React.memo(function ChannelRow({ index }: { index: num
           dirty ? 'font-semibold text-primary' : 'text-muted-foreground',
         )}
       >
-        {String(index).padStart(2, '0')}
+        {BANKS[bankId].pad === 0 ? '—' : String(index).padStart(2, '0')}
       </span>
 
-      <ColorPicker value={strip.color} onChange={(v) => setColor(index, v)} />
-      <IconPicker value={strip.icon} onChange={(v) => setIcon(index, v)} />
+      <ColorPicker value={strip.color} onChange={(v) => setColor(bankId, index, v)} />
+
+      {supportsIcon ? (
+        <IconPicker value={strip.icon} onChange={(v) => setIcon(bankId, index, v)} />
+      ) : (
+        <span className="text-center text-xs text-muted-foreground/50" title="No icon on this bank">
+          —
+        </span>
+      )}
 
       <div className="relative">
         <Input
@@ -50,7 +65,7 @@ export const ChannelRow = React.memo(function ChannelRow({ index }: { index: num
           maxLength={NAME_MAX}
           spellCheck={false}
           placeholder="—"
-          onChange={(e) => setName(index, sanitizeName(e.target.value).name)}
+          onChange={(e) => setName(bankId, index, sanitizeName(e.target.value).name)}
           className={cn(
             'h-8 pr-9 font-medium',
             dirtyFlags?.name && 'border-primary/60 ring-1 ring-primary/30',
@@ -71,9 +86,9 @@ export const ChannelRow = React.memo(function ChannelRow({ index }: { index: num
           size="sm"
           variant={dirty ? 'default' : 'ghost'}
           disabled={!live}
-          onClick={() => void pushStrip(index)}
+          onClick={() => void pushStrip(bankId, index)}
           className="h-7"
-          title={live ? 'Push this channel' : 'Connect to push'}
+          title={live ? 'Push this strip' : 'Connect to push'}
         >
           <Upload className="h-3.5 w-3.5" />
           Push
