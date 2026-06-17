@@ -12,17 +12,6 @@ import {
 } from '@renderer/api/actions';
 import type { ReaperStatus } from '@shared/ipc/contract';
 
-const STATE_DOT: Record<ReaperStatus['state'], string> = {
-  stopped: 'bg-zinc-500',
-  listening: 'bg-emerald-500',
-  error: 'bg-red-500',
-};
-const STATE_LABEL: Record<ReaperStatus['state'], string> = {
-  stopped: 'Off',
-  listening: 'Listening',
-  error: 'Error',
-};
-
 function ReaperSetup({ status }: { status: ReaperStatus }) {
   return (
     <details className="border-t border-border px-4 py-2 text-xs text-muted-foreground">
@@ -38,18 +27,20 @@ function ReaperSetup({ status }: { status: ReaperStatus }) {
           Mode: <b>Configure device IP + local port</b>.
         </li>
         <li>
-          Device port (Reaper → app): <b>{status.listenPort}</b>; Device IP: this PC
-          (<b>127.0.0.1</b> if same machine).
+          <b>Device port</b> (Reaper → app): <b>{status.listenPort}</b>
         </li>
         <li>
-          Local listen port (app → Reaper): <b>{status.reaperPort}</b>.
+          <b>Device IP</b>: this PC — <b>127.0.0.1</b> if Reaper is on the same machine.
+        </li>
+        <li>
+          <b>Local listen port</b> (app → Reaper): <b>{status.reaperPort}</b>
         </li>
         <li>
           Pattern config: <b>X32SyncTool.ReaperOSC</b>; tick{' '}
           <b>Allow binding messages to REAPER actions</b>.
         </li>
         <li>
-          Back here: <b>Start listening</b> → <b>Refresh</b>.
+          Back here: <b>Start listening</b> → <b>Refresh</b> (or just rename a track in Reaper).
         </li>
       </ol>
       <Button
@@ -68,7 +59,26 @@ function ReaperSetup({ status }: { status: ReaperStatus }) {
 export function ReaperPanel() {
   const status = useReaperStore((s) => s.status);
   const tracks = useReaperStore((s) => s.tracks);
+  const monitor = useReaperStore((s) => s.monitor);
   const live = isReaperLive(status);
+  const receiving = monitor.packetsReceived > 0;
+
+  const dot =
+    status.state === 'error'
+      ? 'bg-red-500'
+      : status.state === 'stopped'
+        ? 'bg-zinc-500'
+        : receiving
+          ? 'bg-emerald-500'
+          : 'bg-amber-400 animate-pulse';
+  const label =
+    status.state === 'error'
+      ? 'Error'
+      : status.state === 'stopped'
+        ? 'Off'
+        : receiving
+          ? 'Receiving'
+          : 'Listening';
 
   return (
     <aside className="flex w-80 flex-col border-l border-border bg-card/40">
@@ -78,8 +88,8 @@ export function ReaperPanel() {
         </div>
         <div className="text-sm font-semibold">REAPER</div>
         <span className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground">
-          <span className={cn('h-2 w-2 rounded-full', STATE_DOT[status.state])} />
-          {STATE_LABEL[status.state]}
+          <span className={cn('h-2 w-2 rounded-full', dot)} />
+          {label}
         </span>
       </div>
 
@@ -109,7 +119,8 @@ export function ReaperPanel() {
             </Button>
             <p className="text-[11px] text-muted-foreground">
               Listening on UDP {status.listenPort} · {tracks.length} track
-              {tracks.length === 1 ? '' : 's'} received
+              {tracks.length === 1 ? '' : 's'} · {monitor.packetsReceived} packet
+              {monitor.packetsReceived === 1 ? '' : 's'} received
             </p>
           </>
         ) : (
@@ -130,11 +141,50 @@ export function ReaperPanel() {
 
       <ReaperSetup status={status} />
 
+      <details
+        className="border-t border-border px-4 py-2 text-xs"
+        open={live && !tracks.length}
+      >
+        <summary className="cursor-pointer select-none py-1 font-medium text-muted-foreground">
+          Diagnostics
+        </summary>
+        <div className="mt-1 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-muted-foreground">OSC packets received</span>
+            <span
+              className={cn(
+                'font-semibold tabular-nums',
+                receiving ? 'text-emerald-400' : 'text-amber-400',
+              )}
+            >
+              {monitor.packetsReceived}
+            </span>
+          </div>
+          {live && !receiving && (
+            <p className="text-[11px] text-amber-400/90">
+              Nothing from Reaper yet. Rename a track in Reaper to test — if this stays 0, Reaper
+              isn&apos;t reaching the app (check Device port = {status.listenPort}, Device IP =
+              127.0.0.1).
+            </p>
+          )}
+          {monitor.recent.length > 0 && (
+            <div className="max-h-32 overflow-y-auto rounded border border-border bg-background/50 p-1 font-mono text-[10px] leading-relaxed">
+              {monitor.recent.map((e, i) => (
+                <div key={i} className="truncate">
+                  <span className="text-primary">{e.addr}</span>
+                  {e.args && <span className="text-muted-foreground"> {e.args}</span>}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </details>
+
       <div className="flex-1 overflow-y-auto border-t border-border">
         {tracks.length === 0 ? (
           <div className="p-4 text-center text-xs text-muted-foreground">
-            No track names yet. Start listening and click <b>Refresh</b>, or rename a track in
-            Reaper.
+            No track names yet. Start listening, then <b>rename a track in Reaper</b> or click{' '}
+            <b>Refresh</b>.
           </div>
         ) : (
           tracks.map((t) => (

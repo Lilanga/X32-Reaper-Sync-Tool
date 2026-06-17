@@ -8,13 +8,19 @@
 import dgram from 'node:dgram';
 import { EventEmitter } from 'node:events';
 
-import { encodeMessage, decodePacket } from '../osc/oscCodec';
-import type { ReaperStatus, ReaperTrack } from '@shared/ipc/contract';
+import { encodeMessage, decodePacket, type OscArg } from '../osc/oscCodec';
+import type { ReaperStatus, ReaperTrack, ReaperMonitor, ReaperMonitorEntry } from '@shared/ipc/contract';
 
 /** REAPER command: "Control surface: Refresh all surfaces" — re-sends feedback. */
 const ACTION_REFRESH_SURFACES = 41743;
 
 const TRACK_NAME_RE = /^\/track\/(\d+)\/name$/;
+
+function summarizeArgs(args: OscArg[]): string {
+  return args
+    .map((a) => (a.value instanceof Buffer ? `blob[${a.value.length}]` : String(a.value)))
+    .join(', ');
+}
 
 export interface ReaperConnectOptions {
   listenPort: number;
@@ -31,6 +37,10 @@ export class ReaperService extends EventEmitter {
   private reaperPort = 8000;
   private readonly tracks = new Map<number, string>();
   private lastFeedbackAt: number | null = null;
+  private packetsReceived = 0;
+  private lastInboundAt: number | null = null;
+  private readonly recent: ReaperMonitorEntry[] = [];
+  private monitorTimer: NodeJS.Timeout | null = null;
 
   getStatus(): ReaperStatus {
     return {
@@ -41,7 +51,13 @@ export class ReaperService extends EventEmitter {
       reaperPort: this.reaperPort,
       trackCount: this.tracks.size,
       lastFeedbackAt: this.lastFeedbackAt,
+      packetsReceived: this.packetsReceived,
+      lastInboundAt: this.lastInboundAt,
     };
+  }
+
+  getMonitor(): ReaperMonitor {
+    return { packetsReceived: this.packetsReceived, recent: [...this.recent] };
   }
 
   async start(opts: ReaperConnectOptions): Promise<ReaperStatus> {
@@ -51,6 +67,9 @@ export class ReaperService extends EventEmitter {
     this.reaperPort = opts.reaperPort;
     this.tracks.clear();
     this.lastFeedbackAt = null;
+    this.packetsReceived = 0;
+    this.lastInboundAt = null;
+    this.recent.length = 0;
 
     try {
       await this.bind();
@@ -67,6 +86,10 @@ export class ReaperService extends EventEmitter {
   }
 
   stop(silent = false): void {
+    if (this.monitorTimer) {
+      clearTimeout(this.monitorTimer);
+      this.monitorTimer = null;
+    }
     if (this.socket) {
       try {
         this.socket.close();
@@ -119,14 +142,21 @@ export class ReaperService extends EventEmitter {
   }
 
   private onMessage(buf: Buffer): void {
+    this.packetsReceived++;
+    this.lastInboundAt = Date.now();
+
     let messages;
     try {
       messages = decodePacket(buf);
     } catch {
+      this.pushRecent('(undecodable packet)', `${buf.length} bytes`);
+      this.scheduleMonitor();
       return;
     }
+
     let changed = false;
     for (const msg of messages) {
+      this.pushRecent(msg.address, summarizeArgs(msg.args));
       const m = TRACK_NAME_RE.exec(msg.address);
       if (!m || msg.args.length === 0) continue;
       const value = msg.args[0].value;
@@ -137,11 +167,27 @@ export class ReaperService extends EventEmitter {
         changed = true;
       }
     }
+
+    this.scheduleMonitor();
     if (changed) {
       this.lastFeedbackAt = Date.now();
       this.emit('tracks', this.getTracks());
       this.emit('status', this.getStatus());
     }
+  }
+
+  private pushRecent(addr: string, args: string): void {
+    this.recent.unshift({ addr, args, at: Date.now() });
+    if (this.recent.length > 25) this.recent.length = 25;
+  }
+
+  /** Throttle monitor emits so a refresh burst doesn't flood IPC. */
+  private scheduleMonitor(): void {
+    if (this.monitorTimer) return;
+    this.monitorTimer = setTimeout(() => {
+      this.monitorTimer = null;
+      this.emit('monitor', this.getMonitor());
+    }, 150);
   }
 
   private send(buf: Buffer): void {

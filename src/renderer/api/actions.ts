@@ -109,6 +109,22 @@ export async function reaperRefresh(): Promise<void> {
     return;
   }
   toast('Asked Reaper to resend track names…');
+  // If nothing arrives shortly, surface guidance that pinpoints the likely cause.
+  window.setTimeout(() => {
+    const { tracks, monitor } = useReaperStore.getState();
+    if (tracks.length > 0) return;
+    if (monitor.packetsReceived === 0) {
+      toast(
+        'No OSC received from Reaper. In Reaper’s OSC device set Device port = 9000 and Device IP = 127.0.0.1, then rename a track to test.',
+        'warning',
+      );
+    } else {
+      toast(
+        'Receiving OSC but no track names — tick “Allow binding messages to REAPER actions” and select the X32SyncTool pattern in Reaper.',
+        'warning',
+      );
+    }
+  }, 1800);
 }
 
 export async function installReaperPattern(): Promise<void> {

@@ -47,11 +47,26 @@ export interface ReaperStatus {
   reaperPort: number;
   trackCount: number;
   lastFeedbackAt: number | null;
+  /** Total inbound UDP datagrams seen on the listen port (any address). */
+  packetsReceived: number;
+  lastInboundAt: number | null;
 }
 
 export interface ReaperTrack {
   index: number;
   name: string;
+}
+
+/** A single inbound OSC message, for the live diagnostics monitor. */
+export interface ReaperMonitorEntry {
+  addr: string;
+  args: string;
+  at: number;
+}
+
+export interface ReaperMonitor {
+  packetsReceived: number;
+  recent: ReaperMonitorEntry[];
 }
 
 export interface AppState {
@@ -124,6 +139,7 @@ export interface EventContract {
   };
   'reaper:status': ReaperStatus;
   'reaper:tracks': { tracks: ReaperTrack[] };
+  'reaper:monitor': ReaperMonitor;
   'log:line': { level: 'info' | 'warn' | 'error'; message: string };
 }
 

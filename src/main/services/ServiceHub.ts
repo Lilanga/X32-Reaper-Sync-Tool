@@ -17,6 +17,7 @@ import type {
   PushBankResult,
   PushStripResult,
   ReadBankResult,
+  ReaperMonitor,
   ReaperStatus,
   ReaperTrack,
   Settings,
@@ -55,6 +56,9 @@ export class ServiceHub {
     this.reaper.on('status', (status: ReaperStatus) => this.send(EVENTS.reaperStatus, status));
     this.reaper.on('tracks', (tracks: ReaperTrack[]) =>
       this.send(EVENTS.reaperTracks, { tracks }),
+    );
+    this.reaper.on('monitor', (monitor: ReaperMonitor) =>
+      this.send(EVENTS.reaperMonitor, monitor),
     );
     this.reaper.on('log', (line: { level: 'info' | 'warn' | 'error'; message: string }) => {
       logger.log(`[reaper] ${line.message}`);

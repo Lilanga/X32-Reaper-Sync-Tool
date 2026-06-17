@@ -40,12 +40,16 @@ export function useBootstrap(): void {
     const offReaperTracks = onEvent('reaper:tracks', ({ tracks }) => {
       useReaperStore.getState().setTracks(tracks);
     });
+    const offReaperMonitor = onEvent('reaper:monitor', (monitor) => {
+      useReaperStore.getState().setMonitor(monitor);
+    });
 
     return () => {
       offStatus();
       offChanged();
       offReaperStatus();
       offReaperTracks();
+      offReaperMonitor();
     };
   }, []);
 }

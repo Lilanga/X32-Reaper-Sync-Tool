@@ -26,6 +26,7 @@ export const EVENTS = {
   consoleChanged: 'console:changed',
   reaperStatus: 'reaper:status',
   reaperTracks: 'reaper:tracks',
+  reaperMonitor: 'reaper:monitor',
   logLine: 'log:line',
 } as const;
 

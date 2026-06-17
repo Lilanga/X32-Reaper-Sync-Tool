@@ -43,6 +43,10 @@ describe('ReaperService', () => {
     const tracks = svc.getTracks();
     expect(tracks.find((t) => t.index === 1)?.name).toBe('Lead Vox');
     expect(tracks.find((t) => t.index === 2)?.name).toBe('Bass');
+
+    // The diagnostics monitor counts every inbound datagram and records addresses.
+    expect(svc.getStatus().packetsReceived).toBeGreaterThanOrEqual(2);
+    expect(svc.getMonitor().recent.some((e) => e.addr === '/track/1/name')).toBe(true);
   });
 
   it('refresh() sends /action 41743 to Reaper', async () => {
