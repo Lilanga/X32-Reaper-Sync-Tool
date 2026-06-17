@@ -183,7 +183,13 @@ export class ServiceHub {
     return this.reaper.selfTest();
   }
 
-  async reaperImportProject(): Promise<{ ok: boolean; path?: string; trackCount: number; error?: string }> {
+  async reaperImportProject(): Promise<{
+    ok: boolean;
+    path?: string;
+    trackCount: number;
+    tracks: ReaperTrack[];
+    error?: string;
+  }> {
     const res = await dialog.showOpenDialog({
       title: 'Import REAPER project track names',
       properties: ['openFile'],
@@ -194,7 +200,7 @@ export class ServiceHub {
     });
 
     if (res.canceled || res.filePaths.length === 0) {
-      return { ok: false, trackCount: this.reaper.getTracks().length };
+      return { ok: false, trackCount: this.reaper.getTracks().length, tracks: [] };
     }
 
     const path = res.filePaths[0];
@@ -202,12 +208,13 @@ export class ServiceHub {
       const rpp = await readFile(path, 'utf8');
       const tracks = parseRppTrackNames(rpp);
       this.reaper.replaceTracks(tracks);
-      return { ok: true, path, trackCount: tracks.length };
+      return { ok: true, path, trackCount: tracks.length, tracks };
     } catch (err) {
       return {
         ok: false,
         path,
         trackCount: this.reaper.getTracks().length,
+        tracks: [],
         error: (err as Error).message,
       };
     }

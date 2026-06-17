@@ -142,7 +142,7 @@ export interface IpcContract {
   'reaper:installPattern': { req: void; res: { ok: boolean; path: string; error?: string } };
   'reaper:importProject': {
     req: void;
-    res: { ok: boolean; path?: string; trackCount: number; error?: string };
+    res: { ok: boolean; path?: string; trackCount: number; tracks: ReaperTrack[]; error?: string };
   };
   'reaper:selfTest': { req: void; res: ReaperSelfTest };
 }

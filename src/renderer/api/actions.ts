@@ -11,6 +11,7 @@ import { useReaperStore } from '@renderer/store/useReaperStore';
 import { toast } from '@renderer/store/useToastStore';
 import { BANKS } from '@shared/x32/banks';
 import { sanitizeName } from '@shared/validation/name';
+import type { ReaperTrack } from '@shared/ipc/contract';
 
 export async function connectConsole(): Promise<void> {
   const { settings } = useSettingsStore.getState();
@@ -133,28 +134,44 @@ export async function installReaperPattern(): Promise<void> {
   else toast(`Install failed: ${res.error ?? 'unknown error'}`, 'error');
 }
 
-export async function importReaperProject(): Promise<void> {
-  const res = await invoke('reaper:importProject');
-  if (!res.ok) {
-    if (res.error) toast(`Project import failed: ${res.error}`, 'error');
-    return;
-  }
-  toast(`Imported ${res.trackCount} track name${res.trackCount === 1 ? '' : 's'} from project`, 'success');
-}
-
-/** Apply received Reaper track names onto channels 1:1 (track N → channel N). */
-export function applyReaperToGrid(): void {
-  const { tracks } = useReaperStore.getState();
+/** Map Reaper tracks onto channels 1:1 (track N → channel N) and write the grid. Returns count applied. */
+function applyTracksToGrid(tracks: ReaperTrack[]): number {
   const max = BANKS.ch.count;
   const entries = tracks
     .filter((t) => t.index >= 1 && t.index <= max && t.name.trim() !== '')
     .map((t) => ({ index: t.index, name: sanitizeName(t.name).name }));
-  if (entries.length === 0) {
-    toast('No Reaper track names yet — click Refresh first', 'warning');
+  if (entries.length) useChannelStore.getState().applyReaperNames(entries);
+  return entries.length;
+}
+
+export async function importReaperProject(): Promise<void> {
+  const res = await invoke('reaper:importProject');
+  if (!res.ok) {
+    if (res.error) toast(`Project import failed: ${res.error}`, 'error');
+    return; // silent on cancel
+  }
+  // Populate both the Reaper panel list and the editable grid (grid uses the
+  // response tracks directly, so it never races the reaper:tracks event).
+  useReaperStore.getState().setTracks(res.tracks);
+  const applied = applyTracksToGrid(res.tracks);
+  if (applied === 0) {
+    toast(`Imported ${res.tracks.length} tracks, but none had names to apply`, 'warning');
+  } else {
+    toast(
+      `Imported ${res.tracks.length} track${res.tracks.length === 1 ? '' : 's'} → applied ${applied} name${applied === 1 ? '' : 's'} to channels`,
+      'success',
+    );
+  }
+}
+
+/** Apply the panel's current Reaper track names onto the grid (used by the live-OSC flow). */
+export function applyReaperToGrid(): void {
+  const applied = applyTracksToGrid(useReaperStore.getState().tracks);
+  if (applied === 0) {
+    toast('No Reaper track names yet — import a project or click Refresh first', 'warning');
     return;
   }
-  useChannelStore.getState().applyReaperNames(entries);
-  toast(`Applied ${entries.length} Reaper name${entries.length === 1 ? '' : 's'} to channels`, 'success');
+  toast(`Applied ${applied} Reaper name${applied === 1 ? '' : 's'} to channels`, 'success');
 }
 
 export async function reaperSelfTest(): Promise<void> {
