@@ -6,6 +6,7 @@
 
 import type { BankId, StripField } from '../x32/banks';
 import type { ChannelStripValue } from '../model/channelStrip';
+import type { LayoutData } from '../model/layout';
 
 export type ConnectionState =
   | 'disconnected'
@@ -140,6 +141,15 @@ export interface IpcContract {
   'sim:setEnabled': { req: { enabled: boolean }; res: { enabled: boolean } };
   'settings:get': { req: void; res: Settings };
   'settings:set': { req: Partial<Settings>; res: Settings };
+
+  'layout:save': {
+    req: { layout: LayoutData };
+    res: { ok: boolean; path?: string; canceled?: boolean; error?: string };
+  };
+  'layout:load': {
+    req: void;
+    res: { ok: boolean; layout?: LayoutData; file?: string; canceled?: boolean; error?: string };
+  };
 
   'reaper:connect': {
     req: { listenPort?: number; reaperHost?: string; reaperPort?: number };

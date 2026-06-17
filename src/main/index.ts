@@ -11,9 +11,12 @@ let hub: ServiceHub | null = null;
 const isDev = !!process.env['ELECTRON_RENDERER_URL'];
 
 function createWindow(): void {
+  const bounds = hub?.getWindowBounds();
   mainWindow = new BrowserWindow({
-    width: 1200,
-    height: 820,
+    width: bounds?.width ?? 1200,
+    height: bounds?.height ?? 820,
+    x: bounds?.x,
+    y: bounds?.y,
     minWidth: 960,
     minHeight: 600,
     show: false,
@@ -29,6 +32,11 @@ function createWindow(): void {
   });
 
   mainWindow.on('ready-to-show', () => mainWindow?.show());
+  mainWindow.on('close', () => {
+    if (mainWindow && !mainWindow.isMinimized() && !mainWindow.isMaximized()) {
+      hub?.saveWindowBounds(mainWindow.getBounds());
+    }
+  });
 
   // Open external links in the system browser; block in-app navigation.
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {

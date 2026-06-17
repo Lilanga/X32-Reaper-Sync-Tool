@@ -15,6 +15,8 @@ export const IPC = {
   simSetEnabled: 'sim:setEnabled',
   settingsGet: 'settings:get',
   settingsSet: 'settings:set',
+  layoutSave: 'layout:save',
+  layoutLoad: 'layout:load',
   reaperConnect: 'reaper:connect',
   reaperDisconnect: 'reaper:disconnect',
   reaperRefresh: 'reaper:refresh',

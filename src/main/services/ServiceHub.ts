@@ -1,7 +1,7 @@
 /**
  * Wires the OSC client + simulator together, owns the in-memory settings, and
  * forwards client events to the renderer. IPC handlers call into this hub.
- * (Settings persistence with electron-store arrives in M6.)
+ * Settings (+ window bounds) persist to a JSON file via SettingsStore.
  */
 
 import { dialog } from 'electron';
@@ -14,6 +14,9 @@ import { ReaperService } from './reaper/ReaperService';
 import { detectReaperOscConfig } from './reaper/reaperConfig';
 import { installReaperPattern } from './reaper/reaperPaths';
 import { parseRppTrackNames } from './reaper/rppParser';
+import { SettingsStore, type WindowBounds } from './persistence/SettingsStore';
+import { saveLayoutFile, loadLayoutFile } from './persistence/LayoutFile';
+import type { LayoutData } from '@shared/model/layout';
 import { EVENTS } from '@shared/ipc/channels';
 import type { BankId, StripField } from '@shared/x32/banks';
 import type { ChannelStripValue } from '@shared/model/channelStrip';
@@ -34,24 +37,12 @@ import { logger } from '../util/logger';
 
 export type Sender = (channel: string, payload: unknown) => void;
 
-function defaultSettings(): Settings {
-  return {
-    lastConsoleIp: '',
-    consolePort: 10023,
-    reaperListenPort: 9000,
-    reaperHost: '127.0.0.1',
-    reaperPort: 8000,
-    simulatorEnabled: true,
-    simulatorPort: 10023,
-    theme: 'dark',
-  };
-}
-
 export class ServiceHub {
   readonly client = new X32Client();
   readonly reaper = new ReaperService();
   private simulator: X32Simulator | null = null;
-  private settings: Settings = defaultSettings();
+  private readonly store = new SettingsStore();
+  private settings: Settings = this.store.loadSettings();
 
   constructor(private readonly send: Sender) {
     this.client.on('status', (status: ConnectionStatus) => this.send(EVENTS.consoleStatus, status));
@@ -88,11 +79,13 @@ export class ServiceHub {
 
   setSettings(patch: Partial<Settings>): Settings {
     this.settings = { ...this.settings, ...patch };
+    this.store.saveSettings(this.settings);
     return this.settings;
   }
 
   setSimEnabled(enabled: boolean): { enabled: boolean } {
     this.settings.simulatorEnabled = enabled;
+    this.store.saveSettings(this.settings);
     if (!enabled && this.simulator) this.simulator.stop();
     return { enabled };
   }
@@ -110,7 +103,10 @@ export class ServiceHub {
       }
       return this.client.connect('127.0.0.1', this.settings.simulatorPort, true);
     }
-    if (req.ip) this.settings.lastConsoleIp = req.ip;
+    if (req.ip) {
+      this.settings.lastConsoleIp = req.ip;
+      this.store.saveSettings(this.settings);
+    }
     return this.client.connect(req.ip, req.port ?? this.settings.consolePort, false);
   }
 
@@ -156,6 +152,7 @@ export class ServiceHub {
     const reaperHost = req.reaperHost ?? detected?.deviceHost ?? this.settings.reaperHost;
     const reaperPort = req.reaperPort ?? detected?.localListenPort ?? this.settings.reaperPort;
     this.settings = { ...this.settings, reaperListenPort: listenPort, reaperHost, reaperPort };
+    this.store.saveSettings(this.settings);
     return this.reaper.start({ listenPort, reaperHost, reaperPort });
   }
 
@@ -225,6 +222,22 @@ export class ServiceHub {
         error: (err as Error).message,
       };
     }
+  }
+
+  layoutSave(layout: LayoutData) {
+    return saveLayoutFile(layout);
+  }
+
+  layoutLoad() {
+    return loadLayoutFile();
+  }
+
+  getWindowBounds(): WindowBounds | undefined {
+    return this.store.loadWindowBounds();
+  }
+
+  saveWindowBounds(bounds: WindowBounds): void {
+    this.store.saveWindowBounds(bounds);
   }
 
   private async ensureSimulator(): Promise<void> {

@@ -62,6 +62,7 @@ interface ChannelState {
     field: StripField,
     value: string | number,
   ) => void;
+  loadLayout: (banks: Partial<Record<BankId, ChannelStripValue[]>>) => void;
   markStripClean: (bankId: BankId, index: number) => void;
   markAllClean: () => void;
   reset: () => void;
@@ -151,6 +152,27 @@ export const useChannelStore = create<ChannelState>()(
         else if (field === 'color') cur.color = Number(value);
         else cur.icon = Number(value);
         bank.source[index] = 'console';
+      }),
+
+    loadLayout: (banksData) =>
+      set((s) => {
+        for (const id of Object.keys(banksData) as BankId[]) {
+          const incoming = banksData[id];
+          const bank = s.banks[id];
+          if (!incoming || !bank) continue;
+          const supportsIcon = BANKS[id].supportsIcon;
+          for (const inc of incoming) {
+            const cur = bank.strips[inc.index - 1];
+            if (!cur) continue;
+            cur.name = inc.name;
+            cur.color = inc.color;
+            if (supportsIcon) cur.icon = inc.icon;
+            const flags: FieldFlags = { name: true, color: true };
+            if (supportsIcon) flags.icon = true;
+            bank.dirty[inc.index] = flags;
+            bank.source[inc.index] = 'user';
+          }
+        }
       }),
 
     markStripClean: (bankId, index) =>

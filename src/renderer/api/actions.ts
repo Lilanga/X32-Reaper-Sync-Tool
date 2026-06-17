@@ -12,6 +12,7 @@ import { toast } from '@renderer/store/useToastStore';
 import { BANKS, type StripField, type BankId } from '@shared/x32/banks';
 import { sanitizeName } from '@shared/validation/name';
 import type { ReaperTrack, DiscoveredConsole } from '@shared/ipc/contract';
+import { LAYOUT_VERSION, type LayoutData } from '@shared/model/layout';
 
 const ALL_FIELDS: StripField[] = ['name', 'color', 'icon'];
 
@@ -248,4 +249,44 @@ export async function reaperSelfTest(): Promise<void> {
       'warning',
     );
   }
+}
+
+// ---- Layout persistence + settings --------------------------------------
+
+function buildLayout(): LayoutData {
+  const { banks } = useChannelStore.getState();
+  const out: LayoutData['banks'] = {};
+  for (const id of Object.keys(banks) as BankId[]) {
+    out[id] = banks[id].strips.map((strip) => ({ ...strip }));
+  }
+  return {
+    version: LAYOUT_VERSION,
+    app: 'tritone-x32-sync',
+    savedAt: new Date().toISOString(),
+    banks: out,
+  };
+}
+
+export async function saveLayout(): Promise<void> {
+  const res = await invoke('layout:save', { layout: buildLayout() });
+  if (res.canceled) return;
+  if (res.ok) toast(`Saved layout → ${res.path}`, 'success');
+  else toast(`Save failed: ${res.error ?? 'unknown error'}`, 'error');
+}
+
+export async function loadLayout(): Promise<void> {
+  const res = await invoke('layout:load');
+  if (res.canceled) return;
+  if (!res.ok || !res.layout) {
+    toast(`Load failed: ${res.error ?? 'unknown error'}`, 'error');
+    return;
+  }
+  useChannelStore.getState().loadLayout(res.layout.banks);
+  const count = Object.values(res.layout.banks).reduce((n, arr) => n + (arr?.length ?? 0), 0);
+  toast(`Loaded ${count} strips from ${res.file} — review and Push`, 'success');
+}
+
+/** Persist the console IP so it's remembered next launch (called on IP-field blur). */
+export async function rememberConsoleIp(ip: string): Promise<void> {
+  await invoke('settings:set', { lastConsoleIp: ip });
 }

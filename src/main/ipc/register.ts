@@ -10,6 +10,7 @@ import { IPC } from '@shared/ipc/channels';
 import { BANKS } from '@shared/x32/banks';
 import type { BankId, StripField } from '@shared/x32/banks';
 import type { ChannelStripValue } from '@shared/model/channelStrip';
+import type { LayoutData } from '@shared/model/layout';
 import type { ServiceHub } from '../services/ServiceHub';
 
 const bankIds = Object.keys(BANKS) as [BankId, ...BankId[]];
@@ -60,6 +61,14 @@ const reaperConnectSchema = z.object({
   reaperHost: z.string().optional(),
   reaperPort: z.number().int().positive().optional(),
 });
+const layoutSaveSchema = z.object({
+  layout: z.object({
+    version: z.number(),
+    app: z.string().optional(),
+    savedAt: z.string().optional(),
+    banks: z.record(z.string(), z.array(stripValueSchema)),
+  }),
+});
 
 export function registerIpc(hub: ServiceHub): void {
   ipcMain.handle(IPC.appGetState, () => hub.getState());
@@ -89,6 +98,11 @@ export function registerIpc(hub: ServiceHub): void {
   ipcMain.handle(IPC.simSetEnabled, (_e, raw) => hub.setSimEnabled(simSchema.parse(raw).enabled));
   ipcMain.handle(IPC.settingsGet, () => hub.getSettings());
   ipcMain.handle(IPC.settingsSet, (_e, raw) => hub.setSettings(settingsPatchSchema.parse(raw)));
+
+  ipcMain.handle(IPC.layoutSave, (_e, raw) =>
+    hub.layoutSave(layoutSaveSchema.parse(raw).layout as unknown as LayoutData),
+  );
+  ipcMain.handle(IPC.layoutLoad, () => hub.layoutLoad());
 
   ipcMain.handle(IPC.reaperConnect, (_e, raw) => hub.reaperConnect(reaperConnectSchema.parse(raw)));
   ipcMain.handle(IPC.reaperDisconnect, () => hub.reaperDisconnect());

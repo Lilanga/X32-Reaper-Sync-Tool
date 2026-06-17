@@ -16,6 +16,7 @@ import {
   pushAll,
   scanForConsoles,
   connectToConsole,
+  rememberConsoleIp,
 } from '@renderer/api/actions';
 import { toast } from '@renderer/store/useToastStore';
 import type { ConnectionStatus, DiscoveredConsole } from '@shared/ipc/contract';
@@ -125,6 +126,9 @@ export function ConnectionBar() {
           <Input
             value={settings.simulatorEnabled ? '127.0.0.1 · simulator' : settings.lastConsoleIp}
             onChange={(e) => patch({ lastConsoleIp: e.target.value })}
+            onBlur={() => {
+              if (!settings.simulatorEnabled) void rememberConsoleIp(settings.lastConsoleIp);
+            }}
             disabled={settings.simulatorEnabled || busy}
             placeholder="Console IP — e.g. 192.168.1.10"
             spellCheck={false}
