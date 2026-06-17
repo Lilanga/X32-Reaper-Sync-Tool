@@ -1,5 +1,5 @@
 import { useConnectionStore } from '@renderer/store/useConnectionStore';
-import { useChannelStore } from '@renderer/store/useChannelStore';
+import { useChannelStore, hasDirtyField } from '@renderer/store/useChannelStore';
 import type { ConnectionStatus } from '@shared/ipc/contract';
 
 const STATE_TEXT: Record<ConnectionStatus['state'], string> = {
@@ -12,7 +12,9 @@ const STATE_TEXT: Record<ConnectionStatus['state'], string> = {
 
 export function StatusBar() {
   const status = useConnectionStore((s) => s.status);
-  const dirty = useChannelStore((s) => Object.values(s.dirty).filter(Boolean).length);
+  const dirty = useChannelStore(
+    (s) => Object.values(s.dirty).filter((f) => hasDirtyField(f)).length,
+  );
   const unresolved = useChannelStore((s) => s.unresolved.length);
 
   return (

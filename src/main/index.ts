@@ -17,8 +17,8 @@ function createWindow(): void {
     minWidth: 960,
     minHeight: 600,
     show: false,
-    backgroundColor: '#0b0d12',
-    title: 'X32 Reaper Sync Tool',
+    backgroundColor: '#0A0A0B',
+    title: 'TriTone Labs · X32 Reaper Sync',
     autoHideMenuBar: true,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),

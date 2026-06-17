@@ -4,14 +4,16 @@
  */
 
 import { invoke } from './client';
-import { useChannelStore } from '@renderer/store/useChannelStore';
+import { useChannelStore, hasDirtyField } from '@renderer/store/useChannelStore';
 import { useConnectionStore } from '@renderer/store/useConnectionStore';
 import { useSettingsStore } from '@renderer/store/useSettingsStore';
 import { useReaperStore } from '@renderer/store/useReaperStore';
 import { toast } from '@renderer/store/useToastStore';
-import { BANKS } from '@shared/x32/banks';
+import { BANKS, type StripField } from '@shared/x32/banks';
 import { sanitizeName } from '@shared/validation/name';
 import type { ReaperTrack, DiscoveredConsole } from '@shared/ipc/contract';
+
+const ALL_FIELDS: StripField[] = ['name', 'color', 'icon'];
 
 export async function connectConsole(): Promise<void> {
   const { settings } = useSettingsStore.getState();
@@ -58,44 +60,71 @@ export async function connectToConsole(ip: string): Promise<void> {
 
 export async function pullFromConsole(): Promise<void> {
   const { bankId } = useChannelStore.getState();
-  const res = await invoke('console:readBank', { bankId, fields: ['name'] });
-  useChannelStore.getState().setStrips(res.strips, 'console', ['name'], res.unresolved);
-  const read = res.strips.length - res.unresolved.length;
+  const res = await invoke('console:readBank', { bankId, fields: ALL_FIELDS });
+  useChannelStore.getState().setStrips(res.strips, 'console', ALL_FIELDS, res.unresolved);
   toast(
-    `Pulled ${read} name${read === 1 ? '' : 's'} from console` +
-      (res.unresolved.length ? ` · ${res.unresolved.length} unread` : ''),
+    `Pulled name, color & icon for ${res.strips.length} channels` +
+      (res.unresolved.length ? ` · ${res.unresolved.length} value(s) unread` : ''),
     res.unresolved.length ? 'warning' : 'success',
   );
 }
 
 export async function pushAll(): Promise<void> {
-  const { bankId, strips } = useChannelStore.getState();
-  const res = await invoke('console:pushBank', { bankId, strips, fields: ['name'] });
-  if (!res.ok) {
+  const { bankId, strips, dirty } = useChannelStore.getState();
+  const dirtyStrips = strips.filter((s) => hasDirtyField(dirty[s.index]));
+  if (dirtyStrips.length === 0) {
+    toast('No unsaved edits to push', 'default');
+    return;
+  }
+  const results = await Promise.all(
+    dirtyStrips.map((s) => {
+      const flags = dirty[s.index] ?? {};
+      return invoke('console:pushStrip', {
+        bankId,
+        index: s.index,
+        name: flags.name ? s.name : undefined,
+        color: flags.color ? s.color : undefined,
+        icon: flags.icon ? s.icon : undefined,
+      }).then((res) => ({ index: s.index, res }));
+    }),
+  );
+  if (results.some((r) => !r.res.ok)) {
     toast('Push failed — not connected', 'error');
     return;
   }
-  useChannelStore.getState().markAllClean();
-  const truncated = res.perStrip.filter((p) => p.truncated).length;
+  for (const r of results) useChannelStore.getState().markStripClean(r.index);
+  const truncated = results.filter((r) => r.res.truncated).length;
   toast(
-    `Pushed ${res.perStrip.length} names` +
-      (truncated ? ` · ${truncated} truncated to 12 chars` : ''),
+    `Pushed ${results.length} channel${results.length === 1 ? '' : 's'}` +
+      (truncated ? ` · ${truncated} name(s) truncated to 12` : ''),
     truncated ? 'warning' : 'success',
   );
 }
 
 export async function pushStrip(index: number): Promise<void> {
-  const { bankId, strips } = useChannelStore.getState();
+  const { bankId, strips, dirty } = useChannelStore.getState();
   const strip = strips[index - 1];
   if (!strip) return;
-  const res = await invoke('console:pushStrip', { bankId, index, name: strip.name });
+  const flags = dirty[index];
+  if (!hasDirtyField(flags)) {
+    toast(`Ch ${index}: no unsaved changes`, 'default');
+    return;
+  }
+  const f = flags ?? {};
+  const res = await invoke('console:pushStrip', {
+    bankId,
+    index,
+    name: f.name ? strip.name : undefined,
+    color: f.color ? strip.color : undefined,
+    icon: f.icon ? strip.icon : undefined,
+  });
   if (!res.ok) {
     toast('Push failed — not connected', 'error');
     return;
   }
-  useChannelStore.getState().markClean(index);
+  useChannelStore.getState().markStripClean(index);
   toast(
-    res.truncated ? `Ch ${index} pushed · truncated to 12 chars` : `Ch ${index} pushed`,
+    res.truncated ? `Ch ${index} pushed · name truncated to 12` : `Ch ${index} pushed`,
     res.truncated ? 'warning' : 'success',
   );
 }

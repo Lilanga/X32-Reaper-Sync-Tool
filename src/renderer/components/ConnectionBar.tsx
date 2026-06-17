@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { SlidersVertical, Power, Download, Upload, Cpu, Radar, Loader2 } from 'lucide-react';
+import { Power, Download, Upload, Cpu, Radar, Loader2 } from 'lucide-react';
 
 import { cn } from '@renderer/lib/utils';
+import { Logo } from '@renderer/components/Logo';
 import { Button } from '@renderer/components/ui/button';
 import { Input } from '@renderer/components/ui/input';
 import { Switch } from '@renderer/components/ui/switch';
@@ -97,15 +98,7 @@ export function ConnectionBar() {
 
   return (
     <header className="flex items-center gap-3 border-b border-border bg-card/60 px-4 py-2.5">
-      <div className="flex items-center gap-2.5">
-        <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary/15 text-primary">
-          <SlidersVertical className="h-4 w-4" />
-        </div>
-        <div className="leading-tight">
-          <div className="text-sm font-semibold">X32 · Reaper Sync</div>
-          <div className="text-[11px] text-muted-foreground">Channel name sync</div>
-        </div>
-      </div>
+      <Logo />
 
       <div className="mx-1 h-8 w-px bg-border" />
       <StatusIndicator status={status} />

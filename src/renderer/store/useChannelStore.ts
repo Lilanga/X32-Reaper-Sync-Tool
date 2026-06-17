@@ -10,6 +10,13 @@ import {
 
 const ACTIVE_BANK: BankId = 'ch';
 
+/** Which fields of a strip have unsaved edits (so Push only sends what changed). */
+export type FieldFlags = { name?: boolean; color?: boolean; icon?: boolean };
+
+export function hasDirtyField(flags: FieldFlags | undefined): boolean {
+  return !!flags && (!!flags.name || !!flags.color || !!flags.icon);
+}
+
 function initialStrips(bankId: BankId): ChannelStripValue[] {
   const bank = BANKS[bankId];
   return Array.from({ length: bank.count }, (_, i) => emptyStrip(bankId, i + 1));
@@ -18,7 +25,7 @@ function initialStrips(bankId: BankId): ChannelStripValue[] {
 interface ChannelState {
   bankId: BankId;
   strips: ChannelStripValue[];
-  dirty: Record<number, boolean>;
+  dirty: Record<number, FieldFlags>;
   source: Record<number, StripSource>;
   unresolved: string[];
   lastReadAt: number | null;
@@ -34,14 +41,13 @@ interface ChannelState {
   setIcon: (index: number, icon: number) => void;
   applyReaperNames: (entries: Array<{ index: number; name: string }>) => void;
   applyConsoleChange: (index: number, field: StripField, value: string | number) => void;
-  markClean: (index: number) => void;
+  markStripClean: (index: number) => void;
   markAllClean: () => void;
   reset: () => void;
-  dirtyCount: () => number;
 }
 
 export const useChannelStore = create<ChannelState>()(
-  immer((set, get) => ({
+  immer((set) => ({
     bankId: ACTIVE_BANK,
     strips: initialStrips(ACTIVE_BANK),
     dirty: {},
@@ -57,7 +63,9 @@ export const useChannelStore = create<ChannelState>()(
           if (fields.includes('name')) cur.name = inc.name;
           if (fields.includes('color')) cur.color = inc.color;
           if (fields.includes('icon')) cur.icon = inc.icon;
-          s.dirty[inc.index] = false;
+          // Values now mirror the console → the pulled fields are no longer dirty.
+          const flags = s.dirty[inc.index];
+          if (flags) for (const f of fields) delete flags[f];
           s.source[inc.index] = source;
         }
         s.unresolved = unresolved;
@@ -69,7 +77,8 @@ export const useChannelStore = create<ChannelState>()(
         const cur = s.strips[index - 1];
         if (!cur) return;
         cur.name = name;
-        s.dirty[index] = true;
+        if (!s.dirty[index]) s.dirty[index] = {};
+        s.dirty[index].name = true;
         s.source[index] = 'user';
       }),
 
@@ -78,7 +87,8 @@ export const useChannelStore = create<ChannelState>()(
         const cur = s.strips[index - 1];
         if (!cur) return;
         cur.color = color;
-        s.dirty[index] = true;
+        if (!s.dirty[index]) s.dirty[index] = {};
+        s.dirty[index].color = true;
         s.source[index] = 'user';
       }),
 
@@ -87,7 +97,8 @@ export const useChannelStore = create<ChannelState>()(
         const cur = s.strips[index - 1];
         if (!cur) return;
         cur.icon = icon;
-        s.dirty[index] = true;
+        if (!s.dirty[index]) s.dirty[index] = {};
+        s.dirty[index].icon = true;
         s.source[index] = 'user';
       }),
 
@@ -97,14 +108,16 @@ export const useChannelStore = create<ChannelState>()(
           const cur = s.strips[entry.index - 1];
           if (!cur) continue;
           cur.name = entry.name;
-          s.dirty[entry.index] = true;
+          if (!s.dirty[entry.index]) s.dirty[entry.index] = {};
+          s.dirty[entry.index].name = true;
           s.source[entry.index] = 'reaper';
         }
       }),
 
     applyConsoleChange: (index, field, value) =>
       set((s) => {
-        if (s.dirty[index]) return; // never clobber a pending user edit
+        const flags = s.dirty[index];
+        if (flags && flags[field]) return; // never clobber a pending user edit
         const cur = s.strips[index - 1];
         if (!cur) return;
         if (field === 'name') cur.name = String(value);
@@ -113,9 +126,9 @@ export const useChannelStore = create<ChannelState>()(
         s.source[index] = 'console';
       }),
 
-    markClean: (index) =>
+    markStripClean: (index) =>
       set((s) => {
-        s.dirty[index] = false;
+        delete s.dirty[index];
       }),
 
     markAllClean: () =>
@@ -131,10 +144,5 @@ export const useChannelStore = create<ChannelState>()(
         s.unresolved = [];
         s.lastReadAt = null;
       }),
-
-    dirtyCount: () => {
-      const { dirty } = get();
-      return Object.keys(dirty).filter((k) => dirty[Number(k)]).length;
-    },
   })),
 );
