@@ -66,4 +66,13 @@ describe('ReaperService', () => {
     expect(msg.address).toBe('/action');
     expect(msg.args[0]).toEqual({ type: 'i', value: 41743 });
   });
+
+  it('self-test confirms the loopback receive path', async () => {
+    svc = new ReaperService();
+    await svc.start({ listenPort: LISTEN, reaperHost: '127.0.0.1', reaperPort: REAPER });
+    const result = await svc.selfTest();
+    expect(result.loopback).toBe(true);
+    // Self-test probes must not inflate the Reaper packet counter.
+    expect(svc.getStatus().packetsReceived).toBe(0);
+  });
 });

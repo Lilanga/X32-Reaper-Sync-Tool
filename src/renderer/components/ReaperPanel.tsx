@@ -1,4 +1,12 @@
-import { Music2, Plug, RefreshCw, ArrowRightLeft, FolderInput, CircleSlash } from 'lucide-react';
+import {
+  Music2,
+  Plug,
+  RefreshCw,
+  ArrowRightLeft,
+  FolderInput,
+  CircleSlash,
+  Activity,
+} from 'lucide-react';
 
 import { cn } from '@renderer/lib/utils';
 import { Button } from '@renderer/components/ui/button';
@@ -9,6 +17,7 @@ import {
   reaperRefresh,
   installReaperPattern,
   applyReaperToGrid,
+  reaperSelfTest,
 } from '@renderer/api/actions';
 import type { ReaperStatus } from '@shared/ipc/contract';
 
@@ -162,6 +171,16 @@ export function ReaperPanel() {
               {monitor.packetsReceived}
             </span>
           </div>
+          <Button
+            size="sm"
+            variant="outline"
+            className="w-full"
+            disabled={!live}
+            onClick={() => void reaperSelfTest()}
+          >
+            <Activity className="h-3.5 w-3.5" />
+            Run self-test (is the app reachable?)
+          </Button>
           {live && !receiving && (
             <p className="text-[11px] text-amber-400/90">
               Nothing from Reaper yet. Rename a track in Reaper to test — if this stays 0, Reaper

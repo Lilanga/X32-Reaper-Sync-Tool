@@ -7,19 +7,38 @@
 
 import dgram from 'node:dgram';
 import { EventEmitter } from 'node:events';
+import { networkInterfaces } from 'node:os';
 
 import { encodeMessage, decodePacket, type OscArg } from '../osc/oscCodec';
-import type { ReaperStatus, ReaperTrack, ReaperMonitor, ReaperMonitorEntry } from '@shared/ipc/contract';
+import type {
+  ReaperStatus,
+  ReaperTrack,
+  ReaperMonitor,
+  ReaperMonitorEntry,
+  ReaperSelfTest,
+} from '@shared/ipc/contract';
 
 /** REAPER command: "Control surface: Refresh all surfaces" — re-sends feedback. */
 const ACTION_REFRESH_SURFACES = 41743;
 
 const TRACK_NAME_RE = /^\/track\/(\d+)\/name$/;
+const SELFTEST_ADDR = '/x32sync/selftest';
 
 function summarizeArgs(args: OscArg[]): string {
   return args
     .map((a) => (a.value instanceof Buffer ? `blob[${a.value.length}]` : String(a.value)))
     .join(', ');
+}
+
+/** First non-internal IPv4 address — the interface REAPER would send to over the LAN. */
+function firstLanIPv4(): string | null {
+  const ifaces = networkInterfaces();
+  for (const name of Object.keys(ifaces)) {
+    for (const ni of ifaces[name] ?? []) {
+      if (ni.family === 'IPv4' && !ni.internal) return ni.address;
+    }
+  }
+  return null;
 }
 
 export interface ReaperConnectOptions {
@@ -41,6 +60,7 @@ export class ReaperService extends EventEmitter {
   private lastInboundAt: number | null = null;
   private readonly recent: ReaperMonitorEntry[] = [];
   private monitorTimer: NodeJS.Timeout | null = null;
+  private selfTestState: { loopback: boolean; lan: boolean } | null = null;
 
   getStatus(): ReaperStatus {
     return {
@@ -113,6 +133,41 @@ export class ReaperService extends EventEmitter {
     return { ok: true, trackCount: this.tracks.size };
   }
 
+  /**
+   * Send a probe to our own listener on both loopback and the LAN interface, to
+   * tell whether the receive path works (loopback) and whether the network port
+   * is reachable (lan — a "no" almost always means a firewall is dropping it).
+   */
+  async selfTest(): Promise<ReaperSelfTest> {
+    const lanIp = firstLanIPv4();
+    if (!this.socket) return { loopback: false, lan: false, lanIp };
+
+    this.selfTestState = { loopback: false, lan: false };
+    const sender = dgram.createSocket('udp4');
+    await new Promise<void>((resolve) => sender.bind(0, () => resolve()));
+
+    const probe = (which: string, host: string): void => {
+      sender.send(encodeMessage(SELFTEST_ADDR, [{ type: 's', value: which }]), this.listenPort, host);
+    };
+    probe('loopback', '127.0.0.1');
+    if (lanIp) probe('lan', lanIp);
+
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    try {
+      sender.close();
+    } catch {
+      /* ignore */
+    }
+
+    const result: ReaperSelfTest = {
+      loopback: this.selfTestState.loopback,
+      lan: this.selfTestState.lan,
+      lanIp,
+    };
+    this.selfTestState = null;
+    return result;
+  }
+
   getTracks(): ReaperTrack[] {
     return [...this.tracks.entries()]
       .sort((a, b) => a[0] - b[0])
@@ -123,7 +178,9 @@ export class ReaperService extends EventEmitter {
 
   private bind(): Promise<void> {
     return new Promise<void>((resolve, reject) => {
-      const socket = dgram.createSocket({ type: 'udp4', reuseAddr: true });
+      // No reuseAddr: an exclusive bind surfaces a stray second instance as
+      // EADDRINUSE instead of silently splitting inbound packets.
+      const socket = dgram.createSocket('udp4');
       const onError = (err: Error): void => {
         socket.removeListener('listening', onListening);
         reject(err);
@@ -142,17 +199,29 @@ export class ReaperService extends EventEmitter {
   }
 
   private onMessage(buf: Buffer): void {
-    this.packetsReceived++;
-    this.lastInboundAt = Date.now();
-
     let messages;
     try {
       messages = decodePacket(buf);
     } catch {
+      this.packetsReceived++;
+      this.lastInboundAt = Date.now();
       this.pushRecent('(undecodable packet)', `${buf.length} bytes`);
       this.scheduleMonitor();
       return;
     }
+
+    // Internal self-test packets are recorded separately, not counted as Reaper traffic.
+    if (messages.length === 1 && messages[0].address === SELFTEST_ADDR) {
+      const which = messages[0].args[0]?.value;
+      if (this.selfTestState && typeof which === 'string') {
+        if (which === 'loopback') this.selfTestState.loopback = true;
+        else if (which === 'lan') this.selfTestState.lan = true;
+      }
+      return;
+    }
+
+    this.packetsReceived++;
+    this.lastInboundAt = Date.now();
 
     let changed = false;
     for (const msg of messages) {

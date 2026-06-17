@@ -69,6 +69,15 @@ export interface ReaperMonitor {
   recent: ReaperMonitorEntry[];
 }
 
+/** Result of probing the app's own listener on loopback vs the LAN interface. */
+export interface ReaperSelfTest {
+  /** Listener received a packet sent to 127.0.0.1 (proves the receive path works). */
+  loopback: boolean;
+  /** Listener received a packet sent to the LAN IP (a "no" usually means a firewall block). */
+  lan: boolean;
+  lanIp: string | null;
+}
+
 export interface AppState {
   settings: Settings;
   connection: ConnectionStatus;
@@ -124,6 +133,7 @@ export interface IpcContract {
   'reaper:refresh': { req: void; res: { ok: boolean; trackCount: number } };
   'reaper:getTracks': { req: void; res: { tracks: ReaperTrack[] } };
   'reaper:installPattern': { req: void; res: { ok: boolean; path: string; error?: string } };
+  'reaper:selfTest': { req: void; res: ReaperSelfTest };
 }
 
 export type IpcChannel = keyof IpcContract;

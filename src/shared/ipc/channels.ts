@@ -19,6 +19,7 @@ export const IPC = {
   reaperRefresh: 'reaper:refresh',
   reaperGetTracks: 'reaper:getTracks',
   reaperInstallPattern: 'reaper:installPattern',
+  reaperSelfTest: 'reaper:selfTest',
 } as const;
 
 export const EVENTS = {

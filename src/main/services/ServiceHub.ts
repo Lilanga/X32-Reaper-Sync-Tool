@@ -18,6 +18,7 @@ import type {
   PushStripResult,
   ReadBankResult,
   ReaperMonitor,
+  ReaperSelfTest,
   ReaperStatus,
   ReaperTrack,
   Settings,
@@ -160,6 +161,10 @@ export class ServiceHub {
 
   reaperInstallPattern(): Promise<{ ok: boolean; path: string; error?: string }> {
     return installReaperPattern();
+  }
+
+  reaperSelfTest(): Promise<ReaperSelfTest> {
+    return this.reaper.selfTest();
   }
 
   private async ensureSimulator(): Promise<void> {

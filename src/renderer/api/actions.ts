@@ -147,3 +147,22 @@ export function applyReaperToGrid(): void {
   useChannelStore.getState().applyReaperNames(entries);
   toast(`Applied ${entries.length} Reaper name${entries.length === 1 ? '' : 's'} to channels`, 'success');
 }
+
+export async function reaperSelfTest(): Promise<void> {
+  const r = await invoke('reaper:selfTest');
+  if (!r.loopback) {
+    toast('Self-test: app isn’t receiving even on loopback. Click “Start listening” first.', 'error');
+    return;
+  }
+  if (r.lan) {
+    toast(
+      `Self-test passed — app receives on loopback AND the network (${r.lanIp ?? 'LAN'}). The app is fine; re-check Reaper: Device IP = ${r.lanIp ?? 'your LAN IP'}, Device port = 9000, click OK, then rename a track.`,
+      'success',
+    );
+  } else {
+    toast(
+      `Self-test: loopback works but ${r.lanIp ?? 'LAN'}:9000 is blocked — Windows Firewall is dropping UDP 9000 to the app. Allow it (see chat for the command), then retry.`,
+      'warning',
+    );
+  }
+}
