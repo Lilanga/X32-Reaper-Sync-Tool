@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { cn } from '@renderer/lib/utils';
 import { Popover } from '@renderer/components/ui/popover';
 import { ICON_MAX, clampIcon } from '@shared/x32/icons';
-import { getIconGlyph, iconLabel } from '@renderer/lib/iconGlyphs';
+import { IconGlyph, iconLabel } from '@renderer/lib/iconGlyphs';
 
 const ICON_IDS = Array.from({ length: ICON_MAX }, (_, i) => i + 1);
 
@@ -23,26 +23,23 @@ function IconGrid({ value, onPick }: { value: number; onPick: (id: number) => vo
         className="mb-2 h-7 w-full rounded border border-input bg-background/40 px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       />
       <div className="grid max-h-56 grid-cols-5 gap-1 overflow-y-auto pr-0.5">
-        {ids.map((id) => {
-          const { Glyph, label } = getIconGlyph(id);
-          return (
-            <button
-              key={id}
-              type="button"
-              title={`${label} · #${id}`}
-              onClick={() => onPick(id)}
-              className={cn(
-                'flex h-11 flex-col items-center justify-center gap-0.5 rounded border text-[9px] tabular-nums transition-colors',
-                value === id
-                  ? 'border-primary bg-primary/15 text-primary'
-                  : 'border-border text-muted-foreground hover:bg-accent hover:text-foreground',
-              )}
-            >
-              <Glyph className="h-4 w-4" />
-              {id}
-            </button>
-          );
-        })}
+        {ids.map((id) => (
+          <button
+            key={id}
+            type="button"
+            title={`${iconLabel(id)} · #${id}`}
+            onClick={() => onPick(id)}
+            className={cn(
+              'flex h-11 flex-col items-center justify-center gap-0.5 rounded border text-[9px] tabular-nums transition-colors',
+              value === id
+                ? 'border-primary bg-primary/15 text-primary'
+                : 'border-border text-muted-foreground hover:bg-accent hover:text-foreground',
+            )}
+          >
+            <IconGlyph id={id} className="h-4 w-4" />
+            {id}
+          </button>
+        ))}
         {ids.length === 0 && (
           <div className="col-span-5 py-3 text-center text-[11px] text-muted-foreground">
             No matching icon
@@ -64,17 +61,16 @@ interface IconPickerProps {
 
 export function IconPicker({ value, onChange, disabled }: IconPickerProps) {
   const icon = clampIcon(value);
-  const { Glyph, label } = getIconGlyph(icon);
   return (
     <Popover
       width={268}
       disabled={disabled}
-      triggerLabel={`Icon: ${label} (#${icon})`}
+      triggerLabel={`Icon: ${iconLabel(icon)} (#${icon})`}
       triggerClassName={cn(
         'flex h-6 w-7 items-center justify-center rounded border border-border bg-background/40 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground',
         disabled && 'pointer-events-none opacity-50',
       )}
-      triggerContent={<Glyph className="h-4 w-4" />}
+      triggerContent={<IconGlyph id={icon} className="h-4 w-4" />}
     >
       {(close) => (
         <IconGrid
