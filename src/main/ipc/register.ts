@@ -25,6 +25,7 @@ const stripValueSchema = z.object({
 });
 
 const connectSchema = z.object({ ip: z.string(), port: z.number().int().positive().optional() });
+const discoverSchema = z.object({ timeoutMs: z.number().int().positive().optional() });
 const readBankSchema = z.object({ bankId: bankIdSchema, fields: z.array(fieldSchema).min(1) });
 const readStripSchema = z.object({
   bankId: bankIdSchema,
@@ -65,6 +66,7 @@ export function registerIpc(hub: ServiceHub): void {
 
   ipcMain.handle(IPC.consoleConnect, (_e, raw) => hub.connect(connectSchema.parse(raw)));
   ipcMain.handle(IPC.consoleDisconnect, () => hub.disconnect());
+  ipcMain.handle(IPC.consoleDiscover, (_e, raw) => hub.discover(discoverSchema.parse(raw ?? {})));
 
   ipcMain.handle(IPC.consoleReadBank, (_e, raw) => {
     const req = readBankSchema.parse(raw);

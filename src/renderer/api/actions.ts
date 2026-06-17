@@ -11,7 +11,7 @@ import { useReaperStore } from '@renderer/store/useReaperStore';
 import { toast } from '@renderer/store/useToastStore';
 import { BANKS } from '@shared/x32/banks';
 import { sanitizeName } from '@shared/validation/name';
-import type { ReaperTrack } from '@shared/ipc/contract';
+import type { ReaperTrack, DiscoveredConsole } from '@shared/ipc/contract';
 
 export async function connectConsole(): Promise<void> {
   const { settings } = useSettingsStore.getState();
@@ -40,6 +40,20 @@ export async function setSimulator(enabled: boolean): Promise<void> {
   await invoke('settings:set', { simulatorEnabled: enabled });
   useSettingsStore.getState().patch({ simulatorEnabled: enabled });
   await disconnectConsole();
+}
+
+/** Broadcast-scan the local network for X32/M32 consoles. */
+export async function scanForConsoles(): Promise<DiscoveredConsole[]> {
+  const res = await invoke('console:discover', {});
+  return res.found;
+}
+
+/** Switch to real hardware at `ip` (simulator off) and connect. */
+export async function connectToConsole(ip: string): Promise<void> {
+  await invoke('sim:setEnabled', { enabled: false });
+  await invoke('settings:set', { simulatorEnabled: false, lastConsoleIp: ip });
+  useSettingsStore.getState().patch({ simulatorEnabled: false, lastConsoleIp: ip });
+  await connectConsole();
 }
 
 export async function pullFromConsole(): Promise<void> {

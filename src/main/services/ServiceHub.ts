@@ -9,6 +9,7 @@ import { readFile } from 'node:fs/promises';
 
 import { X32Client, type PushStripRequest } from './osc/X32Client';
 import { X32Simulator } from './simulator/X32Simulator';
+import { discoverX32 } from './osc/Discovery';
 import { ReaperService } from './reaper/ReaperService';
 import { detectReaperOscConfig } from './reaper/reaperConfig';
 import { installReaperPattern } from './reaper/reaperPaths';
@@ -19,6 +20,7 @@ import type { ChannelStripValue } from '@shared/model/channelStrip';
 import type {
   AppState,
   ConnectionStatus,
+  DiscoveredConsole,
   PushBankResult,
   PushStripResult,
   ReadBankResult,
@@ -115,6 +117,11 @@ export class ServiceHub {
   disconnect(): ConnectionStatus {
     this.client.disconnect();
     return this.client.getStatus();
+  }
+
+  async discover(req: { timeoutMs?: number }): Promise<{ found: DiscoveredConsole[] }> {
+    const found = await discoverX32(this.settings.consolePort, req.timeoutMs ?? 2000);
+    return { found };
   }
 
   readBank(req: { bankId: BankId; fields: StripField[] }): Promise<ReadBankResult> {

@@ -1,4 +1,5 @@
-import { SlidersVertical, Power, Download, Upload, Cpu } from 'lucide-react';
+import { useState } from 'react';
+import { SlidersVertical, Power, Download, Upload, Cpu, Radar, Loader2 } from 'lucide-react';
 
 import { cn } from '@renderer/lib/utils';
 import { Button } from '@renderer/components/ui/button';
@@ -12,8 +13,11 @@ import {
   setSimulator,
   pullFromConsole,
   pushAll,
+  scanForConsoles,
+  connectToConsole,
 } from '@renderer/api/actions';
-import type { ConnectionStatus } from '@shared/ipc/contract';
+import { toast } from '@renderer/store/useToastStore';
+import type { ConnectionStatus, DiscoveredConsole } from '@shared/ipc/contract';
 
 const STATE_LABEL: Record<ConnectionStatus['state'], string> = {
   disconnected: 'Disconnected',
@@ -57,9 +61,39 @@ export function ConnectionBar() {
   const settings = useSettingsStore((s) => s.settings);
   const patch = useSettingsStore((s) => s.patch);
 
+  const [scanning, setScanning] = useState(false);
+  const [found, setFound] = useState<DiscoveredConsole[]>([]);
+  const [showResults, setShowResults] = useState(false);
+
   const live = isLive(status);
   const connecting = status.state === 'connecting';
   const busy = live || connecting;
+
+  const selectConsole = async (c: DiscoveredConsole): Promise<void> => {
+    setShowResults(false);
+    toast(`Connecting to ${c.name || c.model || 'X32'} at ${c.ip}…`);
+    await connectToConsole(c.ip);
+  };
+
+  const onScan = async (): Promise<void> => {
+    setScanning(true);
+    setShowResults(false);
+    try {
+      const results = await scanForConsoles();
+      setFound(results);
+      if (results.length === 0) {
+        toast('No X32 found. Check it is powered on and on the same network.', 'warning');
+      } else if (results.length === 1) {
+        await selectConsole(results[0]);
+      } else {
+        setShowResults(true);
+      }
+    } catch {
+      toast('Network scan failed', 'error');
+    } finally {
+      setScanning(false);
+    }
+  };
 
   return (
     <header className="flex items-center gap-3 border-b border-border bg-card/60 px-4 py-2.5">
@@ -94,14 +128,59 @@ export function ConnectionBar() {
           </span>
         </label>
 
-        <Input
-          value={settings.simulatorEnabled ? '127.0.0.1 · simulator' : settings.lastConsoleIp}
-          onChange={(e) => patch({ lastConsoleIp: e.target.value })}
-          disabled={settings.simulatorEnabled || busy}
-          placeholder="Console IP — e.g. 192.168.1.10"
-          spellCheck={false}
-          className="w-56"
-        />
+        <div className="relative flex items-center gap-2">
+          <Input
+            value={settings.simulatorEnabled ? '127.0.0.1 · simulator' : settings.lastConsoleIp}
+            onChange={(e) => patch({ lastConsoleIp: e.target.value })}
+            disabled={settings.simulatorEnabled || busy}
+            placeholder="Console IP — e.g. 192.168.1.10"
+            spellCheck={false}
+            className="w-52"
+          />
+          <Button
+            variant="outline"
+            onClick={() => void onScan()}
+            disabled={scanning || connecting}
+            title="Scan the local network for X32 / M32 consoles"
+          >
+            {scanning ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Radar className="h-4 w-4" />
+            )}
+            {scanning ? 'Scanning…' : 'Scan'}
+          </Button>
+
+          {showResults && found.length > 0 && (
+            <div className="absolute right-0 top-full z-50 mt-1 w-72 rounded-md border border-border bg-popover p-1 shadow-xl">
+              <div className="flex items-center justify-between px-2 py-1 text-[11px] text-muted-foreground">
+                <span>{found.length} consoles found</span>
+                <button
+                  type="button"
+                  className="hover:text-foreground"
+                  onClick={() => setShowResults(false)}
+                >
+                  Close
+                </button>
+              </div>
+              {found.map((c) => (
+                <button
+                  key={c.ip}
+                  type="button"
+                  onClick={() => void selectConsole(c)}
+                  className="flex w-full flex-col items-start rounded px-2 py-1.5 text-left hover:bg-accent"
+                >
+                  <span className="text-sm font-medium">{c.name || c.model || 'X32'}</span>
+                  <span className="text-[11px] text-muted-foreground">
+                    {c.ip}
+                    {c.model ? ` · ${c.model}` : ''}
+                    {c.firmware ? ` · ${c.firmware}` : ''}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
 
         {busy ? (
           <Button variant="outline" onClick={() => void disconnectConsole()}>

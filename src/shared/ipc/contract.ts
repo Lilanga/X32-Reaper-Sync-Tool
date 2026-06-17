@@ -24,6 +24,14 @@ export interface ConnectionStatus {
   simulator: boolean;
 }
 
+/** A console found on the network by the `/xinfo` broadcast scan. */
+export interface DiscoveredConsole {
+  ip: string;
+  name: string;
+  model: string;
+  firmware: string;
+}
+
 export interface Settings {
   lastConsoleIp: string;
   consolePort: number;
@@ -112,6 +120,7 @@ export interface IpcContract {
   'app:getState': { req: void; res: AppState };
   'console:connect': { req: { ip: string; port?: number }; res: ConnectionStatus };
   'console:disconnect': { req: void; res: ConnectionStatus };
+  'console:discover': { req: { timeoutMs?: number }; res: { found: DiscoveredConsole[] } };
   'console:readBank': {
     req: { bankId: BankId; fields: StripField[] };
     res: ReadBankResult;

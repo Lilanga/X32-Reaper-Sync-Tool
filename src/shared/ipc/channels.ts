@@ -7,6 +7,7 @@ export const IPC = {
   appGetState: 'app:getState',
   consoleConnect: 'console:connect',
   consoleDisconnect: 'console:disconnect',
+  consoleDiscover: 'console:discover',
   consoleReadBank: 'console:readBank',
   consoleReadStrip: 'console:readStrip',
   consolePushStrip: 'console:pushStrip',
