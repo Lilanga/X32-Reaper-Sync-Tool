@@ -1,0 +1,43 @@
+appId: com.tritonelabs.x32reapersync
+productName: X32 Reaper Sync Tool
+copyright: Copyright © 2026 Tritone Labs
+
+directories:
+  buildResources: build
+  output: dist
+
+files:
+  - out/**
+  - package.json
+
+extraResources:
+  - from: resources
+    to: resources
+    filter:
+      - '**/*'
+
+asar: true
+
+win:
+  target:
+    - nsis
+  artifactName: ${productName}-${version}-setup.${ext}
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  perMachine: false
+
+mac:
+  target:
+    - dmg
+    - zip
+  category: public.app-category.music
+  hardenedRuntime: true
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+
+linux:
+  target:
+    - AppImage
+  category: AudioVideo

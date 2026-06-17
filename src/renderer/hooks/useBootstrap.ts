@@ -1,0 +1,41 @@
+import { useEffect, useRef } from 'react';
+
+import { invoke, onEvent } from '@renderer/api/client';
+import { useSettingsStore } from '@renderer/store/useSettingsStore';
+import { useConnectionStore } from '@renderer/store/useConnectionStore';
+import { useChannelStore } from '@renderer/store/useChannelStore';
+
+/** Hydrate initial state from main and subscribe to push events. Runs once. */
+export function useBootstrap(): void {
+  const started = useRef(false);
+
+  useEffect(() => {
+    if (started.current) return;
+    started.current = true;
+
+    void (async () => {
+      try {
+        const state = await invoke('app:getState');
+        useSettingsStore.getState().setSettings(state.settings);
+        useConnectionStore.getState().setStatus(state.connection);
+      } catch {
+        /* main not ready — events will catch us up */
+      }
+    })();
+
+    const offStatus = onEvent('console:status', (status) => {
+      useConnectionStore.getState().setStatus(status);
+    });
+    const offChanged = onEvent('console:changed', (change) => {
+      const store = useChannelStore.getState();
+      if (change.bankId === store.bankId) {
+        store.applyConsoleChange(change.index, change.field, change.value);
+      }
+    });
+
+    return () => {
+      offStatus();
+      offChanged();
+    };
+  }, []);
+}
