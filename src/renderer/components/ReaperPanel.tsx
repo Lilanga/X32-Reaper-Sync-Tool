@@ -30,7 +30,9 @@ function ReaperSetup({ status }: { status: ReaperStatus }) {
           <b>Device port</b> (Reaper → app): <b>{status.listenPort}</b>
         </li>
         <li>
-          <b>Device IP</b>: this PC — <b>127.0.0.1</b> if Reaper is on the same machine.
+          <b>Device IP</b> and <b>Local IP</b> must be the same interface. On one PC set both to{' '}
+          <b>127.0.0.1</b>; if Reaper auto-filled Local IP with a LAN address, set Device IP to that
+          same address (mismatched IPs = no packets).
         </li>
         <li>
           <b>Local listen port</b> (app → Reaper): <b>{status.reaperPort}</b>

@@ -115,7 +115,7 @@ export async function reaperRefresh(): Promise<void> {
     if (tracks.length > 0) return;
     if (monitor.packetsReceived === 0) {
       toast(
-        'No OSC received from Reaper. In Reaper’s OSC device set Device port = 9000 and Device IP = 127.0.0.1, then rename a track to test.',
+        'No OSC from Reaper. Most likely Reaper’s Device IP and Local IP are different interfaces — make them match (both 127.0.0.1, or both your LAN IP). Then rename a track to test.',
         'warning',
       );
     } else {
