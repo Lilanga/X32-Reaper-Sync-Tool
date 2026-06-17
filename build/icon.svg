@@ -1,0 +1,15 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="tritone" x1="0" y1="0" x2="1024" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#3BA3FF" />
+      <stop offset="36%" stop-color="#7C5CFF" />
+      <stop offset="68%" stop-color="#D158C7" />
+      <stop offset="100%" stop-color="#F0995C" />
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" rx="220" fill="#0E0E14" />
+  <g transform="translate(80,260)" fill="none" stroke="url(#tritone)" stroke-width="48"
+     stroke-linecap="round" stroke-linejoin="round">
+    <path d="M36 252 C108 252 126 72 216 72 C306 72 324 432 414 432 C504 432 522 72 612 72 C702 72 720 252 828 252" />
+  </g>
+</svg>

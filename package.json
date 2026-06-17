@@ -21,6 +21,7 @@
     "format": "prettier --write \"**/*.{ts,tsx,css,json,md}\"",
     "test": "vitest run",
     "test:watch": "vitest",
+    "make-icons": "node scripts/make-icon.mjs",
     "package:win": "electron-vite build && electron-builder --win",
     "package:mac": "electron-vite build && electron-builder --mac",
     "package:linux": "electron-vite build && electron-builder --linux"
@@ -36,6 +37,7 @@
     "zustand": "^5.0.2"
   },
   "devDependencies": {
+    "@resvg/resvg-js": "^2.6.2",
     "@tanstack/react-table": "^8.20.6",
     "@types/node": "^22.10.2",
     "@types/react": "^18.3.17",
@@ -51,6 +53,7 @@
     "eslint-plugin-react": "^7.37.2",
     "eslint-plugin-react-hooks": "^5.1.0",
     "eslint-plugin-react-refresh": "^0.4.16",
+    "png-to-ico": "^3.0.1",
     "postcss": "^8.4.49",
     "prettier": "^3.4.2",
     "react": "^18.3.1",
