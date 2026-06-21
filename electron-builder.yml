@@ -31,11 +31,15 @@ nsis:
 
 mac:
   icon: build/icon.png
+  artifactName: ${productName}-${version}-${arch}.${ext}
   target:
-    - dmg
-    - zip
+    - target: dmg
+      arch: universal
+    - target: zip
+      arch: universal
   category: public.app-category.music
   hardenedRuntime: true
+  gatekeeperAssess: false
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
 
