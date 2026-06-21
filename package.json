@@ -22,9 +22,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "make-icons": "node scripts/make-icon.mjs",
-    "package:win": "electron-vite build && electron-builder --win",
-    "package:mac": "electron-vite build && electron-builder --mac",
-    "package:linux": "electron-vite build && electron-builder --linux"
+    "package:win": "electron-vite build && electron-builder --win --publish never",
+    "package:mac": "electron-vite build && electron-builder --mac --publish never",
+    "package:linux": "electron-vite build && electron-builder --linux --publish never"
   },
   "dependencies": {
     "class-variance-authority": "^0.7.1",
